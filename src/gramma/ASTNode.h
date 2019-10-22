@@ -40,7 +40,10 @@ struct ASTEnvironment
 	ASTEnvironment* parent = nullptr;
 };
 
-//将新的变量或函数注册到解释器环境里
+//注册新的变量或函数在当前环境
+void registASTEnvSymbol(std::string symbol, UserAST value, ASTEnvironment* env);
+
+//设置用户自定义符号(变量或函数)的值
 void setASTEnvSymbol(std::string symbol, UserAST value, ASTEnvironment* env);
 
 //获得特定名字的函数的实体

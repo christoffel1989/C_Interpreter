@@ -170,7 +170,7 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		//计算变量定义式值
 		result = executeAST(*iter, env);
 		//注册变量至环境当中
-		setASTEnvSymbol(symbol, { {}, result }, env);
+		registASTEnvSymbol(symbol, { {}, result }, env);
 	}
 	//自定义函数
 	else if (type == TokenType::DefProc)
@@ -189,7 +189,7 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 			args.push_back(std::get<std::string>((*iter)->tk.value));
 		}
 		//注册函数至环境当中
-		setASTEnvSymbol(symbol, { args, body }, env);
+		registASTEnvSymbol(symbol, { args, body }, env);
 		//函数定义返回值设置为0
 		result = 0;
 	}
@@ -230,7 +230,7 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 					//求第i个实参
 					result = executeAST(*iterast, env);
 					//注册第i个实参至subenv中
-					setASTEnvSymbol(*iterpara, { {}, result }, &subenv);
+					registASTEnvSymbol(*iterpara, { {}, result }, &subenv);
 					//ast的迭代器步进1
 					iterast++;
 				}
@@ -257,16 +257,20 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		iter++;
 		//计算变量定义式值
 		result = executeAST(*iter, env);
-		//注册变量至环境当中
+		//更新变量在环境中的值
 		setASTEnvSymbol(symbol, { {}, result }, env);
 	}
 	//语句块
 	else if (type == TokenType::Block)
 	{
+		//构造一个调用函数新的环境
+		ASTEnvironment subenv;
+		//他的父亲时env
+		subenv.parent = env;
 		for (auto iter = childs.begin(); iter != childs.end(); iter++)
 		{
-			//逐行执行代码
-			result = executeAST(*iter, env);
+			//逐行执行代码(在新环境中)
+			result = executeAST(*iter, &subenv);
 		}
 	}
 
