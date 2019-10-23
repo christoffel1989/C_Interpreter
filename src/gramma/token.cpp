@@ -1,4 +1,6 @@
-﻿#include "token.h"
+﻿#include "Token.h"
+
+#include "AuxFacility.h"
 
 #include <cmath>
 #include <unordered_map>
@@ -28,6 +30,7 @@ static std::unordered_map<char, TokenType> TokenTypeTable
 	{'*', TokenType::Mul},
 	{'/', TokenType::Div},
 	{'^', TokenType::Pow},
+	{'%', TokenType::Mod},
 	{'(', TokenType::Lp},
 	{')', TokenType::Rp},
 	{'{', TokenType::LBrace},
@@ -208,6 +211,7 @@ std::tuple<Token, std::string> parseToken(std::string input)
 	case '*':
 	case '/':
 	case '^':
+	case '%':
 	case '(':
 	case ')':
 	case '{':
@@ -282,7 +286,7 @@ std::tuple<Token, std::string> parseToken(std::string input)
 	}
 
 	//这三种情况多吃了一个等号需要删掉
-	if (tk.type == TokenType::NotGreat || tk.type == TokenType::NotLess || tk.type == TokenType::Equal)
+	if (isoneof(tk.type, TokenType::NotLess, TokenType::NotGreat, TokenType::Equal, TokenType::NotEqual, TokenType::And, TokenType::Or))
 	{
 		input.erase(input.begin());
 	}

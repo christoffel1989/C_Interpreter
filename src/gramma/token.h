@@ -9,29 +9,35 @@
 //token类型
 enum class TokenType
 {
-	//赋值
-	Assign,
+	//算术运算符
 	Plus,
 	Minus,
 	Mul,
 	Div,
 	Pow,
+	Mod,
+	//关系运算符
+	Less,
+	Great,
+	NotLess,
+	NotGreat,
+	NotEqual,
+	Equal,
+	//逻辑运算符
+	Not,
+	And,
+	Or,
+	//括号
 	Lp,
 	Rp,
 	LBrace,
 	RBrace,
 	Comma,
+	//分号
 	End,
-	Less,
-	Great,
-	Not,
-	NotLess,
-	NotGreat,
-	NotEqual,
-	And,
-	Or,
-	Equal,
+	//数字
 	Number,
+	//系统自带符号
 	PrimitiveSymbol,
 	//symbol的起始为下划线或者字母
 	UserSymbol,
@@ -39,6 +45,8 @@ enum class TokenType
 	DefVar,
 	//定义函数
 	DefProc,
+	//赋值
+	Assign,
 	//条件分支
 	If,
 	ElseIf,

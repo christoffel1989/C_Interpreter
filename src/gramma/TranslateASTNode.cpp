@@ -1,7 +1,7 @@
 ﻿#include "TranslateASTNode.h"
 
 #include <cmath>
-#include <iostream>
+#include <stdexcept>
 
 //执行语法树
 double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
@@ -17,23 +17,41 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 	{
 		result = std::get<double>(ast->tk.value);
 	}
-	//加法
+	//加号
 	else if (type == TokenType::Plus)
 	{
 		auto iter = childs.begin();
-		double val1 = executeAST(*iter, env);
-		iter++;
-		double val2 = executeAST(*iter, env);
-		result = val1 + val2;
+		//二元运算符 含义为加法
+		if (childs.size() == 2)
+		{
+			double val1 = executeAST(*iter, env);
+			iter++;
+			double val2 = executeAST(*iter, env);
+			result = val1 + val2;
+		}
+		//一元运算符 含义为保持不变
+		else
+		{
+			result = executeAST(*iter, env);
+		}
 	}
-	//减法
+	//减号
 	else if (type == TokenType::Minus)
 	{
 		auto iter = childs.begin();
-		double val1 = executeAST(*iter, env);
-		iter++;
-		double val2 = executeAST(*iter, env);
-		result = val1 - val2;
+		//二元运算符 含义为减法
+		if (childs.size() == 2)
+		{
+			double val1 = executeAST(*iter, env);
+			iter++;
+			double val2 = executeAST(*iter, env);
+			result = val1 - val2;
+		}
+		//一元运算符 含义为取反
+		else
+		{
+			result = -executeAST(*iter, env);
+		}
 	}
 	//乘法
 	else if (type == TokenType::Mul)
@@ -71,6 +89,25 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 			throw std::runtime_error("error(arithmatic): zero can not be power by non-positive value!\n");
 		}
 		result = pow(val1, val2);
+	}
+	//模运算
+	else if (type == TokenType::Mod)
+	{
+		auto iter = childs.begin();
+		double val1 = executeAST(*iter, env);
+		int ival1 = (int)val1;
+		if (ival1 != val1)
+		{
+			throw std::runtime_error("error(arithmatic): non-integral number can not be modded!\n");
+		}
+		iter++;
+		double val2 = executeAST(*iter, env);
+		int ival2 = (int)val2;
+		if (ival2 != val2)
+		{
+			throw std::runtime_error("error(arithmatic): non-integral number can not be used to modded!\n");
+		}
+		result = ival1 % ival2;
 	}
 	//小于
 	else if (type == TokenType::Less)
@@ -116,6 +153,39 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		iter++;
 		double val2 = executeAST(*iter, env);
 		result = val1 == val2;
+	}
+	//不等于
+	else if (type == TokenType::NotEqual)
+	{
+		auto iter = childs.begin();
+		double val1 = executeAST(*iter, env);
+		iter++;
+		double val2 = executeAST(*iter, env);
+		result = val1 != val2;
+	}
+	//与
+	else if (type == TokenType::And)
+	{
+		auto iter = childs.begin();
+		double val1 = executeAST(*iter, env);
+		iter++;
+		double val2 = executeAST(*iter, env);
+		result = val1 && val2;
+	}
+	//或
+	else if (type == TokenType::Or)
+	{
+		auto iter = childs.begin();
+		double val1 = executeAST(*iter, env);
+		iter++;
+		double val2 = executeAST(*iter, env);
+		result = val1 || val2;
+	}
+	//非
+	else if (type == TokenType::Not)
+	{
+		auto iter = childs.begin();
+		result = !executeAST(*iter, env);
 	}
 	//条件语句
 	else if (type == TokenType::If)

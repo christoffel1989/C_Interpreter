@@ -1,6 +1,7 @@
 ﻿#include "CreateASTNode.h"
 
 #include "AuxFacility.h"
+#include <stdexcept>
 
 //创建因子的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::string input)
@@ -19,8 +20,32 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 		//设置父节点token
 		parent->tk = tk;
 	}
-	//符号
+	//正号
+	else if (tk.type == TokenType::Plus)
+	{
+		//创建父节点
+		parent = std::make_shared<ASTNode>();
+		//设置父节点token
+		parent->tk = tk;
+		//创建一个子节点是接下来的一个符号
+		std::shared_ptr<ASTNode> child;
+		std::tie(child, input) = createFactorASTNode(input);
+		parent->childs.push_back(child);
+	}
+	//负号
 	else if (tk.type == TokenType::Minus)
+	{
+		//创建父节点
+		parent = std::make_shared<ASTNode>();
+		//设置父节点token
+		parent->tk = tk;
+		//创建一个子节点是接下来的一个符号
+		std::shared_ptr<ASTNode> child;
+		std::tie(child, input) = createFactorASTNode(input);
+		parent->childs.push_back(child);
+	}
+	//!号
+	else if (tk.type == TokenType::Not)
 	{
 		//创建父节点
 		parent = std::make_shared<ASTNode>();
@@ -144,7 +169,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createTermASTNode(std::string 
 		//获取符号
 		auto[op, str] = parseToken(input);
 		//乘号、除号或者阶乘
-		if (isoneof(op.type, TokenType::Mul, TokenType::Div, TokenType::Pow))
+		if (isoneof(op.type, TokenType::Mul, TokenType::Div, TokenType::Pow, TokenType::Mod))
 		{
 			//把父节点搬移到子节点1的位置
 			child1 = parent;
@@ -170,7 +195,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createTermASTNode(std::string 
 }
 
 //创建表达式的语法树节点
-std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::string input)
+std::tuple<std::shared_ptr<ASTNode>, std::string> createArithmeticASTNode(std::string input)
 {
 	std::shared_ptr<ASTNode> parent, child1, child2;
 	//获得第一个项的节点并存储在父节点位置
@@ -206,14 +231,88 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 	return { parent, input };
 }
 
+//创建关系比较的语法树节点
+std::tuple<std::shared_ptr<ASTNode>, std::string> createRelationASTNode(std::string input)
+{
+	std::shared_ptr<ASTNode> parent, child1, child2;
+	//获得第一个项的节点并存储在父节点位置
+	std::tie(parent, input) = createArithmeticASTNode(input);
+
+	while (true)
+	{
+		//获取符号
+		auto[op, str] = parseToken(input);
+		//加号或者减号
+		if (isoneof(op.type, TokenType::Less, TokenType::Great, TokenType::NotLess, TokenType::NotGreat, TokenType::Equal, TokenType::NotEqual))
+		{
+			//把父节点搬移到子节点1的位置
+			child1 = parent;
+			//获取子节点2
+			std::tie(child2, input) = createArithmeticASTNode(str);
+			//创建父节点
+			parent = std::make_shared<ASTNode>();
+			//设置父节点token
+			parent->tk = op;
+			//子节点1和2与父节点相连
+			parent->childs.push_back(child1);
+			parent->childs.push_back(child2);
+		}
+		//其他token
+		else
+		{
+			//退出循环
+			break;
+		}
+	}
+
+	return { parent, input };
+}
+
+//创建表达式的语法树节点
+std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::string input)
+{
+	std::shared_ptr<ASTNode> parent, child1, child2;
+	//获得第一个项的节点并存储在父节点位置
+	std::tie(parent, input) = createRelationASTNode(input);
+
+	while (true)
+	{
+		//获取符号
+		auto[op, str] = parseToken(input);
+		//加号或者减号
+		if (isoneof(op.type, TokenType::And, TokenType::Or))
+		{
+			//把父节点搬移到子节点1的位置
+			child1 = parent;
+			//获取子节点2
+			std::tie(child2, input) = createRelationASTNode(str);
+			//创建父节点
+			parent = std::make_shared<ASTNode>();
+			//设置父节点token
+			parent->tk = op;
+			//子节点1和2与父节点相连
+			parent->childs.push_back(child1);
+			parent->childs.push_back(child2);
+		}
+		//其他token
+		else
+		{
+			//退出循环
+			break;
+		}
+	}
+
+	return { parent, input };
+}
+
 //创建赋值语句的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createAssignmentASTNode(std::string input)
 {
 	//获得前两个token
 	Token tk1, tk2;
 	std::string str;
-	tie(tk1, str) = parseToken(input);
-	tie(tk2, str) = parseToken(str);
+	std::tie(tk1, str) = parseToken(input);
+	std::tie(tk2, str) = parseToken(str);
 
 	//第1、2个tk不同时是user symbo 和 = 号则报错
 	if (tk1.type != TokenType::UserSymbol || tk2.type != TokenType::Assign)
@@ -239,36 +338,12 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createAssignmentASTNode(std::s
 	return { parent, input };
 }
 
-//创建逻辑判断的语法树节点
-std::tuple<std::shared_ptr<ASTNode>, std::string> createLogicASTNode(std::string input)
-{
-	std::shared_ptr<ASTNode> child1, child2, parent;
-
-	//读取表达式1
-	std::tie(child1, input) = createExpressionASTNode(input);
-
-	//读取逻辑运算符号
-	Token tk;
-	std::tie(tk, input) = parseToken(input);
-
-	//读取表达式2
-	std::tie(child2, input) = createExpressionASTNode(input);
-
-	//构造父节点
-	parent = std::make_shared<ASTNode>();
-	parent->tk = tk;
-	parent->childs.push_back(child1);
-	parent->childs.push_back(child2);
-
-	return { parent, input };
-}
-
 //创建条件语句的语法树
 std::tuple<std::shared_ptr<ASTNode>, std::string> createIfASTNode(std::string input)
 {
 	//解析第一个tk
 	Token tk;
-	tie(tk, input) = parseToken(input);
+	std::tie(tk, input) = parseToken(input);
 
 	//如果不是if则报错
 	if (tk.type != TokenType::If)
@@ -282,7 +357,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createIfASTNode(std::string in
 	parent->tk = tk;
 
 	//读取一个左括号
-	tie(tk, input) = parseToken(input);
+	std::tie(tk, input) = parseToken(input);
 	if (tk.type != TokenType::Lp)
 	{
 		//报一个错误
@@ -291,13 +366,13 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createIfASTNode(std::string in
 
 	//读取条件
 	decltype(parent) ifcondition;
-	tie(ifcondition, input) = createLogicASTNode(input);
+	std::tie(ifcondition, input) = createExpressionASTNode(input);
 
 	//添加为parent的第1个儿子
 	parent->childs.push_back(ifcondition);
 
 	//读取一个右括号
-	tie(tk, input) = parseToken(input);
+	std::tie(tk, input) = parseToken(input);
 	if (tk.type != TokenType::Rp)
 	{
 		//报一个错误
@@ -306,27 +381,27 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createIfASTNode(std::string in
 
 	//读取if成立的block
 	decltype(parent) ifblock;
-	tie(ifblock, input) = createBlocksASTNode(input);
+	std::tie(ifblock, input) = createBlocksASTNode(input);
 
 	//添加为parent的第2个儿子
 	parent->childs.push_back(ifblock);
 
 	//读取下一个token
 	std::string str;
-	tie(tk, str) = parseToken(input);
+	std::tie(tk, str) = parseToken(input);
 	//如果是else则继续添加else分支的结果
 	//如果是elseif则看作一个新的if递归即可
 	if (tk.type == TokenType::ElseIf)
 	{
 		decltype(parent) elseifnode;
-		tie(elseifnode, input) = createElseIfASTNode(input);
+		std::tie(elseifnode, input) = createElseIfASTNode(input);
 		//添加为parent的第3个儿子
 		parent->childs.push_back(elseifnode);
 	}
 	else if (tk.type == TokenType::Else)
 	{
 		decltype(parent) elseblock;
-		tie(elseblock, input) = createBlocksASTNode(str);
+		std::tie(elseblock, input) = createBlocksASTNode(str);
 		//添加为parent的第3个儿子
 		parent->childs.push_back(elseblock);
 	}
@@ -339,7 +414,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createElseIfASTNode(std::strin
 {
 	//解析第一个tk
 	Token tk;
-	tie(tk, input) = parseToken(input);
+	std::tie(tk, input) = parseToken(input);
 
 	//如果不是if则报错
 	if (tk.type != TokenType::ElseIf)
@@ -353,7 +428,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createElseIfASTNode(std::strin
 	parent->tk.type = TokenType::If;
 
 	//读取一个左括号
-	tie(tk, input) = parseToken(input);
+	std::tie(tk, input) = parseToken(input);
 	if (tk.type != TokenType::Lp)
 	{
 		//报一个错误
@@ -362,13 +437,13 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createElseIfASTNode(std::strin
 
 	//读取条件
 	decltype(parent) ifcondition;
-	tie(ifcondition, input) = createLogicASTNode(input);
+	std::tie(ifcondition, input) = createExpressionASTNode(input);
 
 	//添加为parent的第1个儿子
 	parent->childs.push_back(ifcondition);
 
 	//读取一个右括号
-	tie(tk, input) = parseToken(input);
+	std::tie(tk, input) = parseToken(input);
 	if (tk.type != TokenType::Rp)
 	{
 		//报一个错误
@@ -377,27 +452,27 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createElseIfASTNode(std::strin
 
 	//读取if成立的block
 	decltype(parent) ifblock;
-	tie(ifblock, input) = createBlocksASTNode(input);
+	std::tie(ifblock, input) = createBlocksASTNode(input);
 
 	//添加为parent的第2个儿子
 	parent->childs.push_back(ifblock);
 
 	//读取下一个token
 	std::string str;
-	tie(tk, str) = parseToken(input);
+	std::tie(tk, str) = parseToken(input);
 	//如果是else则继续添加else分支的结果
 	//如果是elseif则看作一个新的if递归即可
 	if (tk.type == TokenType::ElseIf)
 	{
 		decltype(parent) elseifnode;
-		tie(elseifnode, input) = createElseIfASTNode(str);
+		std::tie(elseifnode, input) = createElseIfASTNode(str);
 		//添加为parent的第3个儿子
 		parent->childs.push_back(elseifnode);
 	}
 	else if (tk.type == TokenType::Else)
 	{
 		decltype(parent) elseblock;
-		tie(elseblock, input) = createBlocksASTNode(str);
+		std::tie(elseblock, input) = createBlocksASTNode(str);
 		//添加为parent的第3个儿子
 		parent->childs.push_back(elseblock);
 	}
@@ -411,9 +486,9 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createDefVarASTNode(std::strin
 	//获得前三个token
 	Token tk1, tk2, tk3;
 	std::string str;
-	tie(tk1, str) = parseToken(input);
-	tie(tk2, str) = parseToken(str);
-	tie(tk3, str) = parseToken(str);
+	std::tie(tk1, str) = parseToken(input);
+	std::tie(tk2, str) = parseToken(str);
+	std::tie(tk3, str) = parseToken(str);
 
 	//第1、2、3个tk不同时是DefVar、user symbo 和 = 号则报错
 	if (tk1.type != TokenType::DefVar || tk2.type != TokenType::UserSymbol || tk3.type != TokenType::Assign)
@@ -490,7 +565,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createDefProcASTNode(std::stri
 	}
 
 	//读取赋值符号
-	tie(tk, input) = parseToken(input);
+	std::tie(tk, input) = parseToken(input);
 	//如果类型不是=号则报错
 	if (tk.type != TokenType::Assign)
 	{
@@ -523,7 +598,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createBlocksASTNode(std::strin
 {
 	//解析第一个tk
 	Token tk;
-	tie(tk, input) = parseToken(input);
+	std::tie(tk, input) = parseToken(input);
 	std::string str;
 
 	//如果不是左大括号则报错
@@ -542,7 +617,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createBlocksASTNode(std::strin
 		std::tie(child, input) = createStatementASTNode(input);
 		parent->childs.push_back(child);
 		//再解析一个tk
-		tie(tk, str) = parseToken(input);
+		std::tie(tk, str) = parseToken(input);
 		//不是Block、IF、While、For等特殊语句的情况下
 		if (isnoneof(child->tk.type, TokenType::Block, TokenType::If, TokenType::While, TokenType::For))
 		{
@@ -557,7 +632,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createBlocksASTNode(std::strin
 			}
 		}
 		//再解析一个tk
-		tie(tk, str) = parseToken(input);
+		std::tie(tk, str) = parseToken(input);
 	} while (tk.type != TokenType::RBrace);
 
 	//如果不是右大括号则报错
@@ -580,7 +655,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createStatementASTNode(std::st
 	//解析第一个tk
 	Token tk;
 	std::string str;
-	tie(tk, str) = parseToken(input);
+	std::tie(tk, str) = parseToken(input);
 
 	//定义变量
 	if (tk.type == TokenType::DefVar)
@@ -611,7 +686,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createStatementASTNode(std::st
 		if (tk.type == TokenType::UserSymbol)
 		{
 			//则继续再度一个字符
-			tie(tk, str) = parseToken(str);
+			std::tie(tk, str) = parseToken(str);
 			//如果是赋值
 			if (tk.type == TokenType::Assign)
 			{
