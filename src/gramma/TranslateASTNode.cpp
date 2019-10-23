@@ -1,7 +1,5 @@
 ﻿#include "TranslateASTNode.h"
 
-#include "token.h"
-
 #include <cmath>
 #include <iostream>
 
