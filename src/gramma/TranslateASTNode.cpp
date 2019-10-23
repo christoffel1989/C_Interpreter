@@ -224,7 +224,7 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		}
 	}
 	//for语句
-	else if (type == TokenType::While)
+	else if (type == TokenType::For)
 	{
 		//获得循环起始
 		auto iter = childs.begin();

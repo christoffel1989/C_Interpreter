@@ -293,8 +293,8 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createRelationASTNode(std::str
 	return { parent, input };
 }
 
-//创建表达式的语法树节点
-std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::string input)
+//创建逻辑运算的语法树节点
+std::tuple<std::shared_ptr<ASTNode>, std::string> createLogicASTNode(std::string input)
 {
 	std::shared_ptr<ASTNode> parent, child1, child2;
 	//获得第一个项的节点并存储在父节点位置
@@ -359,6 +359,42 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createAssignmentASTNode(std::s
 	std::tie(child, input) = createExpressionASTNode(str);
 	//child与parent连接
 	parent->childs.push_back(child);
+
+	return { parent, input };
+}
+
+//创建表达式的语法树节点
+std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::string input)
+{
+	//获得前两个token
+	Token tk;
+	std::string str;
+	std::tie(tk, str) = parseToken(input);
+
+	std::shared_ptr<ASTNode> parent;
+
+	//如果是用户自定义的符号 
+	if (tk.type == TokenType::UserSymbol)
+	{
+		//则继续再度一个字符
+		std::tie(tk, str) = parseToken(str);
+		//如果是赋值
+		if (tk.type == TokenType::Assign)
+		{
+			//原输入重新用赋值语句去解析
+			std::tie(parent, input) = createAssignmentASTNode(input);
+		}
+		else
+		{
+			//其他情况下用逻辑运算语句解析
+			std::tie(parent, input) = createLogicASTNode(input);
+		}
+	}
+	else
+	{
+		//其他情况下用逻辑运算语句解析
+		std::tie(parent, input) = createLogicASTNode(input);
+	}
 
 	return { parent, input };
 }
@@ -857,28 +893,8 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createStatementASTNode(std::st
 	}
 	else
 	{
-		//如果是用户自定义的符号 
-		if (tk.type == TokenType::UserSymbol)
-		{
-			//则继续再度一个字符
-			std::tie(tk, str) = parseToken(str);
-			//如果是赋值
-			if (tk.type == TokenType::Assign)
-			{
-				//原输入重新用赋值语句去解析
-				std::tie(parent, input) = createAssignmentASTNode(input);
-			}
-			else
-			{
-				//其他情况下用表达式语句解析
-				std::tie(parent, input) = createExpressionASTNode(input);
-			}
-		}
-		else
-		{
-			//其他情况下用表达式语句解析
-			std::tie(parent, input) = createExpressionASTNode(input);
-		}
+		//其他情况下用表达式语句解析
+		std::tie(parent, input) = createExpressionASTNode(input);
 	}
 
 	return { parent, input };
