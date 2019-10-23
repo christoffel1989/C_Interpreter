@@ -12,3 +12,6 @@ recursive function definition
 
 variable scope overlap
 ![img](https://github.com/christoffel1989/C_Intepretor/blob/master/3.gif)
+
+for loop
+![img](https://github.com/christoffel1989/C_Intepretor/blob/master/4.gif)
