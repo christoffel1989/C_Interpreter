@@ -7,7 +7,7 @@
 #include <functional>
 
 //token类型
-enum TokenType
+enum class TokenType
 {
 	//赋值
 	Assign = '=',

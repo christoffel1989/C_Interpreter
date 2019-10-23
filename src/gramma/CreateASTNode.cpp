@@ -637,7 +637,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createStatementASTNode(std::st
 			//则继续再度一个字符
 			tie(tk, str) = parseToken(str);
 			//如果是赋值
-			if (tk.type == Assign)
+			if (tk.type == TokenType::Assign)
 			{
 				//原输入重新用赋值语句去解析
 				std::tie(parent, input) = createAssignmentASTNode(input);
