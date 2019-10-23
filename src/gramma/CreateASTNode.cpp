@@ -1,30 +1,6 @@
 ﻿#include "CreateASTNode.h"
 
-#include "token.h"
-
-//定义一些简化书写的模板
-//一个都不等
-template <typename T>
-bool isnoneof(T t, T arg)
-{
-	return t != arg;
-}
-template <typename T, typename... Ts>
-bool isnoneof(T t, T arg, Ts... args)
-{
-	return (t != arg) && isnoneof(t, args...);
-}
-//等于其中一个
-template <typename T>
-bool isoneof(T t, T arg)
-{
-	return t == arg;
-}
-template <typename T, typename... Ts>
-bool isoneof(T t, T arg, Ts... args)
-{
-	return (t == arg) || isoneof(t, args...);
-}
+#include "AuxFacility.h"
 
 //创建因子的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::string input)
@@ -509,7 +485,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createDefProcASTNode(std::stri
 		//判断停止while后的符号是不是右括号 如果不是则报错
 		if (tk.type != TokenType::Rp)
 		{
-			throw std::runtime_error("error(define var): miss a )!\n");
+			throw std::runtime_error("error(define proc): miss a )!\n");
 		}
 	}
 
@@ -518,7 +494,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createDefProcASTNode(std::stri
 	//如果类型不是=号则报错
 	if (tk.type != TokenType::Assign)
 	{
-		throw std::runtime_error("error(define var): need a =!\n");
+		throw std::runtime_error("error(define proc): need a =!\n");
 	}
 
 	//构建节点

@@ -7,6 +7,38 @@
 //原始映射表
 static std::unordered_map<std::string, std::variant<double, std::function<double(double)>>> PrimitiveTable;
 
+//关键字表
+static std::unordered_map<std::string, TokenType> KeywordTable = 
+{
+	{"var", TokenType::DefVar},
+	{"proc", TokenType::DefProc},
+	{"if", TokenType::If},
+	{"elseif", TokenType::ElseIf},
+	{"else", TokenType::Else},
+	{"for", TokenType::For},
+	{"while", TokenType::While}
+};
+
+//token映射表
+static std::unordered_map<char, TokenType> TokenTypeTable
+{
+	{'=', TokenType::Assign},
+	{'+', TokenType::Plus},
+	{'-', TokenType::Minus},
+	{'*', TokenType::Mul},
+	{'/', TokenType::Div},
+	{'^', TokenType::Pow},
+	{'(', TokenType::Lp},
+	{')', TokenType::Rp},
+	{'{', TokenType::LBrace},
+	{'}', TokenType::RBrace},
+	{',', TokenType::Comma},
+	{';', TokenType::End},
+	{'<', TokenType::Less},
+	{'>', TokenType::Great},
+	{'!', TokenType::Not}
+};
+
 //初始化原始符号表
 bool initPrimitiveTable();
 void registPrimitiveSymbol(std::string symbol, std::variant<double, std::function<double(double)>> value);
@@ -176,23 +208,31 @@ std::tuple<Token, std::string> parseToken(std::string input)
 	case '*':
 	case '/':
 	case '^':
-	case '!':
 	case '(':
 	case ')':
 	case '{':
 	case '}':
 	case ',':
 	case ';':
-		tk.type = TokenType(ch);
+		tk.type = TokenTypeTable[ch];
+		break;
+	case '!':
+		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::NotEqual;
 		break;
 	case '<':
-		tk.type = (*input.begin() != '=') ? TokenType(ch) : TokenType::NotGreat;
+		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::NotGreat;
 		break;
 	case '>':
-		tk.type = (*input.begin() != '=') ? TokenType(ch) : TokenType::NotLess;
+		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::NotLess;
 		break;
 	case '=':
-		tk.type = (*input.begin() != '=') ? TokenType(ch) : TokenType::Equal;
+		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::Equal;
+		break;
+	case '&':
+		tk.type = (*input.begin() != '&') ? TokenType::BadType : TokenType::And;
+		break;
+	case '|':
+		tk.type = (*input.begin() != '|') ? TokenType::BadType : TokenType::Or;
 		break;
 	case '0':
 	case '1':
@@ -219,25 +259,9 @@ std::tuple<Token, std::string> parseToken(std::string input)
 			std::tie(tk.value, input) = parseSymbol(input);
 			auto symbol = std::get<std::string>(tk.value);
 			//如果是系统内部定义的关键字
-			if (symbol == "var")
+			if (auto iter = KeywordTable.find(symbol); iter != KeywordTable.end())
 			{
-				tk.type = TokenType::DefVar;
-			}
-			else if (symbol == "proc")
-			{
-				tk.type = TokenType::DefProc;
-			}
-			else if (symbol == "if")
-			{
-				tk.type = TokenType::If;
-			}
-			else if (symbol == "elseif")
-			{
-				tk.type = TokenType::ElseIf;
-			}
-			else if (symbol == "else")
-			{
-				tk.type = TokenType::Else;
+				tk.type = iter->second;
 			}
 			//内部提前定义好的符号
 			else if (auto v = getPrimitiveSymbol(symbol))
