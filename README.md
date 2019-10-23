@@ -7,3 +7,6 @@ variable and nonrecursive function definition
 
 recursive function definition
 ![img](https://github.com/christoffel1989/C_Intepretor/blob/master/2.gif)
+
+variable scope overlap
+![img](https://github.com/christoffel1989/C_Intepretor/blob/master/3.gif)
