@@ -20,9 +20,6 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createRelationASTNode(std::str
 //创建逻辑运算的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createLogicASTNode(std::string input);
 
-//创建赋值语句的语法树节点
-std::tuple<std::shared_ptr<ASTNode>, std::string> createAssignmentASTNode(std::string input);
-
 //创建表达式的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::string input);
 
@@ -37,9 +34,6 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createWhileASTNode(std::string
 
 //创建for语句的语法树
 std::tuple<std::shared_ptr<ASTNode>, std::string> createForASTNode(std::string input);
-
-//创建定义变量语句的语法树节点
-std::tuple<std::shared_ptr<ASTNode>, std::string> createDefVarASTNode(std::string input);
 
 //创建定义过程的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createDefProcASTNode(std::string input);

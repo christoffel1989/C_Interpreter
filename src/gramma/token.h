@@ -16,6 +16,11 @@ enum class TokenType
 	Div,
 	Pow,
 	Mod,
+	//自运算符
+	SelfPlus,
+	SelfMinus,
+	SelfMul,
+	SelfDiv,
 	//关系运算符
 	Less,
 	Great,

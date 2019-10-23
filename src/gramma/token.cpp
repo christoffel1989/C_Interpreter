@@ -29,6 +29,10 @@ static std::unordered_map<char, TokenType> TokenTypeTable
 	{'-', TokenType::Minus},
 	{'*', TokenType::Mul},
 	{'/', TokenType::Div},
+	{'+=', TokenType::SelfPlus},
+	{'-=', TokenType::SelfMinus},
+	{'*=', TokenType::SelfMul},
+	{'/=', TokenType::SelfDiv},
 	{'^', TokenType::Pow},
 	{'%', TokenType::Mod},
 	{'(', TokenType::Lp},
@@ -206,10 +210,6 @@ std::tuple<Token, std::string> parseToken(std::string input)
 
 	switch (ch)
 	{
-	case '+':
-	case '-':
-	case '*':
-	case '/':
 	case '^':
 	case '%':
 	case '(':
@@ -219,6 +219,18 @@ std::tuple<Token, std::string> parseToken(std::string input)
 	case ',':
 	case ';':
 		tk.type = TokenTypeTable[ch];
+		break;
+	case '+':
+		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::SelfPlus;
+		break;
+	case '-':
+		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::SelfMinus;
+		break;
+	case '*':
+		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::SelfMul;
+		break;
+	case '/':
+		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::SelfDiv;
 		break;
 	case '!':
 		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::NotEqual;
@@ -286,7 +298,8 @@ std::tuple<Token, std::string> parseToken(std::string input)
 	}
 
 	//这三种情况多吃了一个等号需要删掉
-	if (isoneof(tk.type, TokenType::NotLess, TokenType::NotGreat, TokenType::Equal, TokenType::NotEqual, TokenType::And, TokenType::Or))
+	if (isoneof(tk.type, TokenType::NotLess, TokenType::NotGreat, TokenType::Equal, TokenType::NotEqual, TokenType::And, 
+						 TokenType::Or, TokenType::SelfPlus, TokenType::SelfMinus, TokenType::SelfMul, TokenType::SelfDiv))
 	{
 		input.erase(input.begin());
 	}

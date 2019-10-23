@@ -330,39 +330,6 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createLogicASTNode(std::string
 	return { parent, input };
 }
 
-//创建赋值语句的语法树节点
-std::tuple<std::shared_ptr<ASTNode>, std::string> createAssignmentASTNode(std::string input)
-{
-	//获得前两个token
-	Token tk1, tk2;
-	std::string str;
-	std::tie(tk1, str) = parseToken(input);
-	std::tie(tk2, str) = parseToken(str);
-
-	//第1、2个tk不同时是user symbo 和 = 号则报错
-	if (tk1.type != TokenType::UserSymbol || tk2.type != TokenType::Assign)
-	{
-		//报一个错误
-		throw std::runtime_error("error(assignment): const value can not be assign!\n");
-	}
-
-	//创建赋值父节点
-	auto parent = std::make_shared<ASTNode>();
-	//结点类型为赋值
-	parent->tk.type = TokenType::Assign;
-	//创建代表被赋值变量的子节点
-	auto child = std::make_shared<ASTNode>();
-	child->tk = tk1;
-	//child与parent连接
-	parent->childs.push_back(child);
-	//创建代表赋值=号右边表达式的语句
-	std::tie(child, input) = createExpressionASTNode(str);
-	//child与parent连接
-	parent->childs.push_back(child);
-
-	return { parent, input };
-}
-
 //创建表达式的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::string input)
 {
@@ -373,16 +340,65 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 
 	std::shared_ptr<ASTNode> parent;
 
+	//如果是变量定义符号
+	if (tk.type == TokenType::DefVar)
+	{
+		//读取定义的变量名
+		Token tkname;
+		std::tie(tkname, input) = parseToken(str);
+		//如果不是用户自定义的符号
+		if (tkname.type != TokenType::UserSymbol)
+		{
+			//报一个错误
+			throw std::runtime_error("error(Def var): need a symbol to reprensent variable name!\n");
+		}
+
+		//读取赋值符号
+		std::tie(tk, input) = parseToken(input);
+
+		//如果不是赋值符号
+		if (tk.type != TokenType::Assign)
+		{
+			//报一个错误
+			throw std::runtime_error("error(Def var): miss = for defining varible!\n");
+		}
+
+		//创建赋值父节点
+		parent = std::make_shared<ASTNode>();
+		//结点类型为赋值
+		parent->tk.type = TokenType::DefVar;
+		//创建代表被赋值变量的子节点
+		auto child = std::make_shared<ASTNode>();
+		child->tk = tkname;
+		//child与parent连接
+		parent->childs.push_back(child);
+		//创建代表赋值=号右边表达式的语句
+		std::tie(child, input) = createExpressionASTNode(input);
+		//child与parent连接
+		parent->childs.push_back(child);
+	}
 	//如果是用户自定义的符号 
-	if (tk.type == TokenType::UserSymbol)
+	else if (tk.type == TokenType::UserSymbol)
 	{
 		//则继续再度一个字符
-		std::tie(tk, str) = parseToken(str);
-		//如果是赋值
-		if (tk.type == TokenType::Assign)
+		Token tktemp;
+		std::tie(tktemp, str) = parseToken(str);
+		//如果是=、+=、-=、*=、/=
+		if (isoneof(tktemp.type, TokenType::Assign, TokenType::SelfPlus, TokenType::SelfMinus, TokenType::SelfMul, TokenType::SelfDiv))
 		{
-			//原输入重新用赋值语句去解析
-			std::tie(parent, input) = createAssignmentASTNode(input);
+			//创建赋值父节点
+			parent = std::make_shared<ASTNode>();
+			//结点类型为赋值
+			parent->tk.type = tktemp.type;
+			//创建代表被赋值变量的子节点
+			auto child = std::make_shared<ASTNode>();
+			child->tk = tk;
+			//child与parent连接
+			parent->childs.push_back(child);
+			//创建代表赋值=号右边表达式的语句
+			std::tie(child, input) = createExpressionASTNode(str);
+			//child与parent连接
+			parent->childs.push_back(child);
 		}
 		else
 		{
@@ -673,40 +689,6 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createForASTNode(std::string i
 	return { parent, input };
 }
 
-//创建定义变量语句的语法数节点
-std::tuple<std::shared_ptr<ASTNode>, std::string> createDefVarASTNode(std::string input)
-{
-	//获得前三个token
-	Token tk1, tk2, tk3;
-	std::string str;
-	std::tie(tk1, str) = parseToken(input);
-	std::tie(tk2, str) = parseToken(str);
-	std::tie(tk3, str) = parseToken(str);
-
-	//第1、2、3个tk不同时是DefVar、user symbo 和 = 号则报错
-	if (tk1.type != TokenType::DefVar || tk2.type != TokenType::UserSymbol || tk3.type != TokenType::Assign)
-	{
-		//报一个错误
-		throw std::runtime_error("error(Def var): illegal syntax for define variable!\n");
-	}
-
-	//创建赋值父节点
-	auto parent = std::make_shared<ASTNode>();
-	//结点类型为赋值
-	parent->tk.type = TokenType::DefVar;
-	//创建代表被赋值变量的子节点
-	auto child = std::make_shared<ASTNode>();
-	child->tk = tk2;
-	//child与parent连接
-	parent->childs.push_back(child);
-	//创建代表赋值=号右边表达式的语句
-	std::tie(child, input) = createExpressionASTNode(str);
-	//child与parent连接
-	parent->childs.push_back(child);
-
-	return { parent, input };
-}
-
 //创建定义过程的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createDefProcASTNode(std::string input)
 {
@@ -850,14 +832,8 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createStatementASTNode(std::st
 	std::string str;
 	std::tie(tk, str) = parseToken(input);
 
-	//定义变量
-	if (tk.type == TokenType::DefVar)
-	{
-		//原输入重新用定义变量语句去解析
-		std::tie(parent, input) = createDefVarASTNode(input);
-	}
 	//定义函数
-	else if (tk.type == TokenType::DefProc)
+	if (tk.type == TokenType::DefProc)
 	{
 		std::tie(parent, input) = createDefProcASTNode(input);
 	}

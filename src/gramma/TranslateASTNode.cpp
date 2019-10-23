@@ -190,26 +190,36 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 	//条件语句
 	else if (type == TokenType::If)
 	{
+		//构造一个调用函数新的环境
+		ASTEnvironment subenv;
+		//他的父亲时env
+		subenv.parent = env;
+
 		//先计算条件
 		auto iter = childs.begin();
-		double condition = executeAST(*iter, env);
+		double condition = executeAST(*iter, &subenv);
 		if (condition != 0)
 		{
 			//执行if的语句块
 			iter++;
-			result = executeAST(*iter, env);
+			result = executeAST(*iter, &subenv);
 		}
 		else
 		{
 			//执行else的语句块
 			iter++;
 			iter++;
-			result = executeAST(*iter, env);
+			result = executeAST(*iter, &subenv);
 		}
 	}
 	//While语句
 	else if (type == TokenType::While)
 	{
+		//构造一个调用函数新的环境
+		ASTEnvironment subenv;
+		//他的父亲时env
+		subenv.parent = env;
+
 		//获得循环条件
 		auto iter = childs.begin();
 		auto condition = *iter;
@@ -217,15 +227,20 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		iter++;
 		auto body = *iter;
 		result = 0;
-		while (executeAST(condition, env) != 0)
+		while (executeAST(condition, &subenv) != 0)
 		{
 			//执行循环体
-			result = executeAST(body, env);
+			result = executeAST(body, &subenv);
 		}
 	}
 	//for语句
 	else if (type == TokenType::For)
 	{
+		//构造一个调用函数新的环境
+		ASTEnvironment subenv;
+		//他的父亲时env
+		subenv.parent = env;
+
 		//获得循环起始
 		auto iter = childs.begin();
 		auto start = *iter;
@@ -239,10 +254,10 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		iter++;
 		auto body = *iter;
 		result = 0;
-		for (executeAST(start, env); executeAST(end, env) != 0; executeAST(increment, env))
+		for (executeAST(start, &subenv); executeAST(end, &subenv) != 0; executeAST(increment, &subenv))
 		{
 			//执行循环体
-			result = executeAST(body, env);
+			result = executeAST(body, &subenv);
 		}
 	}
 	//原生变量及函数
@@ -365,6 +380,133 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		result = executeAST(*iter, env);
 		//更新变量在环境中的值
 		setASTEnvSymbol(symbol, { {}, result }, env);
+	}
+	else if (type == TokenType::SelfPlus)
+	{
+		auto iter = childs.begin();
+		//获得变量名字
+		auto symbol = std::get<std::string>((*iter)->tk.value);
+		if (auto v = getASTEnvSymbol(symbol, env))
+		{
+			//解包
+			auto[paras, body] = v.value();
+			if (std::holds_alternative<double>(body))
+			{
+				result = std::get<double>(body);
+				//计算变量值
+				iter++;
+				result += executeAST(*iter, env);
+				//更新变量在环境中的值
+				setASTEnvSymbol(symbol, { {}, result }, env);
+			}
+			//变量类型错误
+			else
+			{
+				throw std::runtime_error("error(*=): the symbol is not variable!\n");
+			}
+		}
+		//如果查不到这个变量则报错
+		else
+		{
+			throw std::runtime_error("error(*=): undefine symbol!\n");
+		}
+	}
+	else if (type == TokenType::SelfMinus)
+	{
+		auto iter = childs.begin();
+		//获得变量名字
+		auto symbol = std::get<std::string>((*iter)->tk.value);
+		if (auto v = getASTEnvSymbol(symbol, env))
+		{
+			//解包
+			auto[paras, body] = v.value();
+			if (std::holds_alternative<double>(body))
+			{
+				result = std::get<double>(body);
+				//计算变量值
+				iter++;
+				result -= executeAST(*iter, env);
+				//更新变量在环境中的值
+				setASTEnvSymbol(symbol, { {}, result }, env);
+			}
+			//变量类型错误
+			else
+			{
+				throw std::runtime_error("error(-=): the symbol is not variable!\n");
+			}
+		}
+		//如果查不到这个变量则报错
+		else
+		{
+			throw std::runtime_error("error(-=): undefine symbol!\n");
+		}
+	}
+	else if (type == TokenType::SelfMul)
+	{
+		auto iter = childs.begin();
+		//获得变量名字
+		auto symbol = std::get<std::string>((*iter)->tk.value);
+		if (auto v = getASTEnvSymbol(symbol, env))
+		{
+			//解包
+			auto[paras, body] = v.value();
+			if (std::holds_alternative<double>(body))
+			{
+				result = std::get<double>(body);
+				//计算变量值
+				iter++;
+				result *= executeAST(*iter, env);
+				//更新变量在环境中的值
+				setASTEnvSymbol(symbol, { {}, result }, env);
+			}
+			//变量类型错误
+			else
+			{
+				throw std::runtime_error("error(*=): the symbol is not variable!\n");
+			}
+		}
+		//如果查不到这个变量则报错
+		else
+		{
+			throw std::runtime_error("error(*=): undefine symbol!\n");
+		}
+	}
+	else if (type == TokenType::SelfDiv)
+	{
+		auto iter = childs.begin();
+		//获得变量名字
+		auto symbol = std::get<std::string>((*iter)->tk.value);
+		if (auto v = getASTEnvSymbol(symbol, env))
+		{
+			//解包
+			auto[paras, body] = v.value();
+			if (std::holds_alternative<double>(body))
+			{
+				result = std::get<double>(body);
+				//计算变量值
+				iter++;
+				double divisor = executeAST(*iter, env);
+				if (divisor == 0)
+				{
+					//报一个错误
+					throw std::runtime_error("error(/=): divided by zero!\n");
+				}
+				//计算变量值
+				result /= divisor;
+				//更新变量在环境中的值
+				setASTEnvSymbol(symbol, { {}, result }, env);
+			}
+			//变量类型错误
+			else
+			{
+				throw std::runtime_error("error(/=): the symbol is not variable!\n");
+			}
+		}
+		//如果查不到这个变量则报错
+		else
+		{
+			throw std::runtime_error("error(/=): undefine symbol!\n");
+		}
 	}
 	//语句块
 	else if (type == TokenType::Block)
