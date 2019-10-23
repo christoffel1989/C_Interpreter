@@ -1,7 +1,80 @@
 ﻿#include "TranslateASTNode.h"
 
 #include <cmath>
+#include <unordered_map>
 #include <stdexcept>
+
+//////////////////////////////////////////////构建二元运算符号的表//////////////////////////////////////////////////////////
+//二元运算符号对应的函数
+double astadd(double a, double b) { return a + b; }
+double astminus(double a, double b) { return a - b; }
+double astmul(double a, double b) { return a * b; }
+double astless(double a, double b) { return a < b; }
+double astgreat(double a, double b) { return a > b; }
+double astnotless(double a, double b) { return a >= b; }
+double astnotgreat(double a, double b) { return a <= b; }
+double astequal(double a, double b) { return a == b; }
+double astnotequal(double a, double b) { return a != b; }
+double astand(double a, double b) { return a && b; }
+double astor(double a, double b) { return a || b; }
+double astdiv(double a, double b)
+{
+	//除数不能为0
+	if (b == 0)
+	{
+		throw std::runtime_error("error(bad syntax): divided by zero!\n");
+	}
+	return a / b;
+}
+double astpow(double a, double b) 
+{ 
+	//当底为0 幂为非正实数时幂操作无效
+	if (a == 0 && b <= 0)
+	{
+		throw std::runtime_error("error(arithmatic): zero can not be power by non-positive value!\n");
+	}
+	return pow(a, b);
+}
+double astmod(double a, double b)
+{
+	int ia = (int)a;
+	if (ia != a)
+	{
+		throw std::runtime_error("error(arithmatic): non-integral number can not be modded!\n");
+	}
+	int ib = (int)b;
+	if (ib != b)
+	{
+		throw std::runtime_error("error(arithmatic): non-integral number can not be used to modded!\n");
+	}
+	return ia % ib;
+}
+//二元运算的映射表
+static std::unordered_map<TokenType, double(*)(double, double)> Op2Table =
+{
+	{TokenType::Plus, astadd},
+	{TokenType::Minus, astminus},
+	{TokenType::Mul, astmul},
+	{TokenType::Div, astdiv},
+	{TokenType::Pow, astpow},
+	{TokenType::Mod, astmod},
+	{TokenType::Less, astless},
+	{TokenType::Great, astgreat},
+	{TokenType::NotLess, astnotless},
+	{TokenType::NotGreat, astnotgreat},
+	{TokenType::Equal, astequal},
+	{TokenType::NotEqual, astnotequal},
+	{TokenType::And, astand},
+	{TokenType::Or, astor},
+};
+//一元自运算的映射表
+static std::unordered_map<TokenType, double(*)(double, double)> Op1SelfTable =
+{
+	{TokenType::SelfPlus, astadd},
+	{TokenType::SelfMinus, astminus},
+	{TokenType::SelfMul, astmul},
+	{TokenType::SelfDiv, astdiv},
+};
 
 //执行语法树
 double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
@@ -12,174 +85,83 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 	auto& childs = ast->childs;
 	double result;
 
-	//数字
-	if (type == TokenType::Number)
-	{
-		result = std::get<double>(ast->tk.value);
-	}
-	//加号
-	else if (type == TokenType::Plus)
+	//查询根节点是否在二元运算表中
+	if (Op2Table.find(type) != Op2Table.end())
 	{
 		auto iter = childs.begin();
-		//二元运算符 含义为加法
 		if (childs.size() == 2)
 		{
+			//计算第1个操作数
 			double val1 = executeAST(*iter, env);
+			//迭代器步进1
 			iter++;
+			//计算第2个操作数
 			double val2 = executeAST(*iter, env);
-			result = val1 + val2;
+			result = Op2Table[type](val1, val2);
 		}
-		//一元运算符 含义为保持不变
+		//特殊情况为+ 和 -可能是一元运算
 		else
 		{
 			result = executeAST(*iter, env);
+			//结果取负
+			if (type == TokenType::Minus)
+			{
+				result = -result;
+			}
 		}
+		
 	}
-	//减号
-	else if (type == TokenType::Minus)
+	//查询根节点是否在一元运算表中
+	else if (Op1SelfTable.find(type) != Op1SelfTable.end())
 	{
 		auto iter = childs.begin();
-		//二元运算符 含义为减法
-		if (childs.size() == 2)
+		//获得变量名字
+		auto symbol = std::get<std::string>((*iter)->tk.value);
+		if (auto v = getASTEnvSymbol(symbol, env))
 		{
-			double val1 = executeAST(*iter, env);
-			iter++;
-			double val2 = executeAST(*iter, env);
-			result = val1 - val2;
+			//解包
+			auto[paras, body] = v.value();
+			if (std::holds_alternative<double>(body))
+			{
+				result = std::get<double>(body);
+				//计算变量值
+				iter++;
+				result = Op1SelfTable[type](result, executeAST(*iter, env));
+				//更新变量在环境中的值
+				setASTEnvSymbol(symbol, { {}, result }, env);
+			}
+			//变量类型错误
+			else
+			{
+				throw std::runtime_error("error(assignment): the symbol is not variable!\n");
+			}
 		}
-		//一元运算符 含义为取反
+		//如果查不到这个变量则报错
 		else
 		{
-			result = -executeAST(*iter, env);
+			throw std::runtime_error("error(assignment): undefine symbol!\n");
 		}
 	}
-	//乘法
-	else if (type == TokenType::Mul)
+	else if (type == TokenType::Assign)
 	{
 		auto iter = childs.begin();
-		double val1 = executeAST(*iter, env);
-		iter++;
-		double val2 = executeAST(*iter, env);
-		result = val1 * val2;
-	}
-	//除法
-	else if (type == TokenType::Div)
-	{
-		auto iter = childs.begin();
-		double val1 = executeAST(*iter, env);
-		iter++;
-		double val2 = executeAST(*iter, env);
-		if (val2 == 0)
+		//获得变量名字
+		auto symbol = std::get<std::string>((*iter)->tk.value);
+		//如果查不到这个变量则报错
+		if (!getASTEnvSymbol(symbol, env))
 		{
-			//报一个错误
-			throw std::runtime_error("error(bad syntax): divided by zero!\n");
-		}
-		result = val1 / val2;
-	}
-	//幂乘
-	else if (type == TokenType::Pow)
-	{
-		auto iter = childs.begin();
-		double val1 = executeAST(*iter, env);
-		iter++;
-		double val2 = executeAST(*iter, env);
-		//当底为0 幂为非正实数时幂操作无效
-		if (val1 == 0 && val2 <= 0)
-		{
-			throw std::runtime_error("error(arithmatic): zero can not be power by non-positive value!\n");
-		}
-		result = pow(val1, val2);
-	}
-	//模运算
-	else if (type == TokenType::Mod)
-	{
-		auto iter = childs.begin();
-		double val1 = executeAST(*iter, env);
-		int ival1 = (int)val1;
-		if (ival1 != val1)
-		{
-			throw std::runtime_error("error(arithmatic): non-integral number can not be modded!\n");
+			throw std::runtime_error("error(assignment): undefine symbol!\n");
 		}
 		iter++;
-		double val2 = executeAST(*iter, env);
-		int ival2 = (int)val2;
-		if (ival2 != val2)
-		{
-			throw std::runtime_error("error(arithmatic): non-integral number can not be used to modded!\n");
-		}
-		result = ival1 % ival2;
+		//计算变量定义式值
+		result = executeAST(*iter, env);
+		//更新变量在环境中的值
+		setASTEnvSymbol(symbol, { {}, result }, env);
 	}
-	//小于
-	else if (type == TokenType::Less)
+	//数字
+	else if (type == TokenType::Number)
 	{
-		auto iter = childs.begin();
-		double val1 = executeAST(*iter, env);
-		iter++;
-		double val2 = executeAST(*iter, env);
-		result = val1 < val2;
-	}
-	//大于
-	else if (type == TokenType::Great)
-	{
-		auto iter = childs.begin();
-		double val1 = executeAST(*iter, env);
-		iter++;
-		double val2 = executeAST(*iter, env);
-		result = val1 > val2;
-	}
-	//大于等于
-	else if (type == TokenType::NotLess)
-	{
-		auto iter = childs.begin();
-		double val1 = executeAST(*iter, env);
-		iter++;
-		double val2 = executeAST(*iter, env);
-		result = val1 >= val2;
-	}
-	//小于等于
-	else if (type == TokenType::NotGreat)
-	{
-		auto iter = childs.begin();
-		double val1 = executeAST(*iter, env);
-		iter++;
-		double val2 = executeAST(*iter, env);
-		result = val1 <= val2;
-	}
-	//等于
-	else if (type == TokenType::Equal)
-	{
-		auto iter = childs.begin();
-		double val1 = executeAST(*iter, env);
-		iter++;
-		double val2 = executeAST(*iter, env);
-		result = val1 == val2;
-	}
-	//不等于
-	else if (type == TokenType::NotEqual)
-	{
-		auto iter = childs.begin();
-		double val1 = executeAST(*iter, env);
-		iter++;
-		double val2 = executeAST(*iter, env);
-		result = val1 != val2;
-	}
-	//与
-	else if (type == TokenType::And)
-	{
-		auto iter = childs.begin();
-		double val1 = executeAST(*iter, env);
-		iter++;
-		double val2 = executeAST(*iter, env);
-		result = val1 && val2;
-	}
-	//或
-	else if (type == TokenType::Or)
-	{
-		auto iter = childs.begin();
-		double val1 = executeAST(*iter, env);
-		iter++;
-		double val2 = executeAST(*iter, env);
-		result = val1 || val2;
+		result = std::get<double>(ast->tk.value);
 	}
 	//非
 	else if (type == TokenType::Not)
@@ -363,149 +345,6 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		{
 			//抛出异常
 			throw std::runtime_error("error(bad syntax): undefine symbol!\n");
-		}
-	}
-	else if (type == TokenType::Assign)
-	{
-		auto iter = childs.begin();
-		//获得变量名字
-		auto symbol = std::get<std::string>((*iter)->tk.value);
-		//如果查不到这个变量则报错
-		if (!getASTEnvSymbol(symbol, env))
-		{
-			throw std::runtime_error("error(assignment): undefine symbol!\n");
-		}
-		iter++;
-		//计算变量定义式值
-		result = executeAST(*iter, env);
-		//更新变量在环境中的值
-		setASTEnvSymbol(symbol, { {}, result }, env);
-	}
-	else if (type == TokenType::SelfPlus)
-	{
-		auto iter = childs.begin();
-		//获得变量名字
-		auto symbol = std::get<std::string>((*iter)->tk.value);
-		if (auto v = getASTEnvSymbol(symbol, env))
-		{
-			//解包
-			auto[paras, body] = v.value();
-			if (std::holds_alternative<double>(body))
-			{
-				result = std::get<double>(body);
-				//计算变量值
-				iter++;
-				result += executeAST(*iter, env);
-				//更新变量在环境中的值
-				setASTEnvSymbol(symbol, { {}, result }, env);
-			}
-			//变量类型错误
-			else
-			{
-				throw std::runtime_error("error(*=): the symbol is not variable!\n");
-			}
-		}
-		//如果查不到这个变量则报错
-		else
-		{
-			throw std::runtime_error("error(*=): undefine symbol!\n");
-		}
-	}
-	else if (type == TokenType::SelfMinus)
-	{
-		auto iter = childs.begin();
-		//获得变量名字
-		auto symbol = std::get<std::string>((*iter)->tk.value);
-		if (auto v = getASTEnvSymbol(symbol, env))
-		{
-			//解包
-			auto[paras, body] = v.value();
-			if (std::holds_alternative<double>(body))
-			{
-				result = std::get<double>(body);
-				//计算变量值
-				iter++;
-				result -= executeAST(*iter, env);
-				//更新变量在环境中的值
-				setASTEnvSymbol(symbol, { {}, result }, env);
-			}
-			//变量类型错误
-			else
-			{
-				throw std::runtime_error("error(-=): the symbol is not variable!\n");
-			}
-		}
-		//如果查不到这个变量则报错
-		else
-		{
-			throw std::runtime_error("error(-=): undefine symbol!\n");
-		}
-	}
-	else if (type == TokenType::SelfMul)
-	{
-		auto iter = childs.begin();
-		//获得变量名字
-		auto symbol = std::get<std::string>((*iter)->tk.value);
-		if (auto v = getASTEnvSymbol(symbol, env))
-		{
-			//解包
-			auto[paras, body] = v.value();
-			if (std::holds_alternative<double>(body))
-			{
-				result = std::get<double>(body);
-				//计算变量值
-				iter++;
-				result *= executeAST(*iter, env);
-				//更新变量在环境中的值
-				setASTEnvSymbol(symbol, { {}, result }, env);
-			}
-			//变量类型错误
-			else
-			{
-				throw std::runtime_error("error(*=): the symbol is not variable!\n");
-			}
-		}
-		//如果查不到这个变量则报错
-		else
-		{
-			throw std::runtime_error("error(*=): undefine symbol!\n");
-		}
-	}
-	else if (type == TokenType::SelfDiv)
-	{
-		auto iter = childs.begin();
-		//获得变量名字
-		auto symbol = std::get<std::string>((*iter)->tk.value);
-		if (auto v = getASTEnvSymbol(symbol, env))
-		{
-			//解包
-			auto[paras, body] = v.value();
-			if (std::holds_alternative<double>(body))
-			{
-				result = std::get<double>(body);
-				//计算变量值
-				iter++;
-				double divisor = executeAST(*iter, env);
-				if (divisor == 0)
-				{
-					//报一个错误
-					throw std::runtime_error("error(/=): divided by zero!\n");
-				}
-				//计算变量值
-				result /= divisor;
-				//更新变量在环境中的值
-				setASTEnvSymbol(symbol, { {}, result }, env);
-			}
-			//变量类型错误
-			else
-			{
-				throw std::runtime_error("error(/=): the symbol is not variable!\n");
-			}
-		}
-		//如果查不到这个变量则报错
-		else
-		{
-			throw std::runtime_error("error(/=): undefine symbol!\n");
 		}
 	}
 	//语句块
