@@ -1,11 +1,11 @@
 ﻿#include "token.h"
 
 #include <cmath>
-#include <map>
+#include <unordered_map>
 #include <stdexcept>
 
 //原始映射表
-static std::map<std::string, std::variant<double, std::function<double(double)>>> PrimitiveTable;
+static std::unordered_map<std::string, std::variant<double, std::function<double(double)>>> PrimitiveTable;
 
 //初始化原始符号表
 bool initPrimitiveTable();
