@@ -126,12 +126,13 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 			//不是右括号表示里面有函数输入参数
 			if (tk.type != TokenType::Rp)
 			{
+				input = res1;
 				//解析出左括号后面的函数输入子节点
 				do
 				{
 					//解析输入参数
 					std::shared_ptr<ASTNode> child;
-					tie(child, input) = createExpressionASTNode(res1);
+					tie(child, input) = createExpressionASTNode(input);
 					parent->childs.push_back(child);
 					//解析逗号(如果不是逗号则循环中断)
 					tie(tk, input) = parseToken(input);
