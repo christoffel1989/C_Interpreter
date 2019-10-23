@@ -7,9 +7,6 @@
 #include <unordered_map>
 #include <memory>
 
-//前置声明
-struct ASTEnvironment;
-
 //语法树节点
 struct ASTNode
 {
