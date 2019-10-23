@@ -109,7 +109,6 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 				result = -result;
 			}
 		}
-		
 	}
 	//查询根节点是否在一元运算表中
 	else if (Op1SelfTable.find(type) != Op1SelfTable.end())
@@ -168,6 +167,19 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 	{
 		auto iter = childs.begin();
 		result = !executeAST(*iter, env);
+	}
+	//语句块
+	else if (type == TokenType::Block)
+	{
+		//构造一个调用函数新的环境
+		ASTEnvironment subenv;
+		//他的父亲时env
+		subenv.parent = env;
+		for (auto iter = childs.begin(); iter != childs.end(); iter++)
+		{
+			//逐行执行代码(在新环境中)
+			result = executeAST(*iter, &subenv);
+		}
 	}
 	//条件语句
 	else if (type == TokenType::If)
@@ -242,26 +254,9 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 			result = executeAST(body, &subenv);
 		}
 	}
-	//原生变量及函数
-	else if (type == TokenType::PrimitiveSymbol)
+	//无操作
+	else if (type == TokenType::End)
 	{
-		auto symbol = std::get<std::string>(tk.value);
-		auto primitive = getPrimitiveSymbol(symbol).value();
-		//函数
-		if (std::holds_alternative<std::function<double(double)>>(primitive))
-		{
-			//获得函数体
-			auto fun = std::get<std::function<double(double)>>(primitive);
-			//获得函数输入参数 只有单输入参数
-			auto arg = executeAST(*childs.begin(), env);
-			//执行函数
-			result = fun(arg);
-		}
-		//常量
-		else
-		{
-			result = std::get<double>(primitive);
-		}
 	}
 	//自定义变量
 	else if (type == TokenType::DefVar)
@@ -295,6 +290,27 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		registASTEnvSymbol(symbol, { args, body }, env);
 		//函数定义返回值设置为0
 		result = 0;
+	}
+	//原生变量及函数
+	else if (type == TokenType::PrimitiveSymbol)
+	{
+		auto symbol = std::get<std::string>(tk.value);
+		auto primitive = getPrimitiveSymbol(symbol).value();
+		//函数
+		if (std::holds_alternative<std::function<double(double)>>(primitive))
+		{
+			//获得函数体
+			auto fun = std::get<std::function<double(double)>>(primitive);
+			//获得函数输入参数 只有单输入参数
+			auto arg = executeAST(*childs.begin(), env);
+			//执行函数
+			result = fun(arg);
+		}
+		//常量
+		else
+		{
+			result = std::get<double>(primitive);
+		}
 	}
 	//用户自定义的符号
 	else if (type == TokenType::UserSymbol)
@@ -346,23 +362,6 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 			//抛出异常
 			throw std::runtime_error("error(bad syntax): undefine symbol!\n");
 		}
-	}
-	//语句块
-	else if (type == TokenType::Block)
-	{
-		//构造一个调用函数新的环境
-		ASTEnvironment subenv;
-		//他的父亲时env
-		subenv.parent = env;
-		for (auto iter = childs.begin(); iter != childs.end(); iter++)
-		{
-			//逐行执行代码(在新环境中)
-			result = executeAST(*iter, &subenv);
-		}
-	}
-	//无操作
-	else if (type == TokenType::End)
-	{
 	}
 	else
 	{
