@@ -1,6 +1,8 @@
 # C_Intepretor
 a c-like code intepretor (console version)
 
+coding by c++17
+
 variable and nonrecursive function definition
 
 ![img](https://github.com/christoffel1989/C_Intepretor/blob/master/1.gif)
