@@ -3,6 +3,31 @@
 #include "AuxFacility.h"
 #include <stdexcept>
 
+//创建空语句
+std::tuple<std::shared_ptr<ASTNode>, std::string> createNOpASTNode(std::string input)
+{
+	std::shared_ptr<ASTNode> parent;
+
+	//获得当前第一个token
+	Token tk;
+	tie(tk, input) = parseToken(input);
+
+	if (tk.type == TokenType::End)
+	{
+		//创建父节点
+		parent = std::make_shared<ASTNode>();
+		//设置父节点token
+		parent->tk = tk;
+	}
+	else
+	{
+		//报一个错误
+		throw std::runtime_error("error(bad syntax): not ;!\n");
+	}
+
+	return { parent, input };
+}
+
 //创建因子的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::string input)
 {
@@ -381,7 +406,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createIfASTNode(std::string in
 
 	//读取if成立的block
 	decltype(parent) ifblock;
-	std::tie(ifblock, input) = createBlocksASTNode(input);
+	std::tie(ifblock, input) = createBlockASTNode(input);
 
 	//添加为parent的第2个儿子
 	parent->childs.push_back(ifblock);
@@ -401,7 +426,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createIfASTNode(std::string in
 	else if (tk.type == TokenType::Else)
 	{
 		decltype(parent) elseblock;
-		std::tie(elseblock, input) = createBlocksASTNode(str);
+		std::tie(elseblock, input) = createBlockASTNode(str);
 		//添加为parent的第3个儿子
 		parent->childs.push_back(elseblock);
 	}
@@ -452,7 +477,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createElseIfASTNode(std::strin
 
 	//读取if成立的block
 	decltype(parent) ifblock;
-	std::tie(ifblock, input) = createBlocksASTNode(input);
+	std::tie(ifblock, input) = createBlockASTNode(input);
 
 	//添加为parent的第2个儿子
 	parent->childs.push_back(ifblock);
@@ -472,10 +497,142 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createElseIfASTNode(std::strin
 	else if (tk.type == TokenType::Else)
 	{
 		decltype(parent) elseblock;
-		std::tie(elseblock, input) = createBlocksASTNode(str);
+		std::tie(elseblock, input) = createBlockASTNode(str);
 		//添加为parent的第3个儿子
 		parent->childs.push_back(elseblock);
 	}
+
+	return { parent, input };
+}
+
+//创建while语句的语法树
+std::tuple<std::shared_ptr<ASTNode>, std::string> createWhileASTNode(std::string input)
+{
+	//解析第一个tk
+	Token tk;
+	std::tie(tk, input) = parseToken(input);
+
+	//如果不是while则报错
+	if (tk.type != TokenType::While)
+	{
+		//报一个错误
+		throw std::runtime_error("error(bad syntax): miss keyword while!\n");
+	}
+
+	//构建父节点
+	auto parent = std::make_shared<ASTNode>();
+	parent->tk = tk;
+
+	//读取一个左括号
+	std::tie(tk, input) = parseToken(input);
+	if (tk.type != TokenType::Lp)
+	{
+		//报一个错误
+		throw std::runtime_error("error(bad syntax): while loop need a (!\n");
+	}
+
+	//循环条件
+	decltype(parent) loopcondition;
+	std::tie(loopcondition, input) = createExpressionASTNode(input);
+
+	//添加为parent的第1个儿子
+	parent->childs.push_back(loopcondition);
+
+	//读取一个右括号
+	std::tie(tk, input) = parseToken(input);
+	if (tk.type != TokenType::Rp)
+	{
+		//报一个错误
+		throw std::runtime_error("error(bad syntax): while loop need a )!\n");
+	}
+
+	//读取while的循环体
+	decltype(parent) loopblock;
+	std::tie(loopblock, input) = createBlockASTNode(input);
+
+	//添加为parent的第2个儿子
+	parent->childs.push_back(loopblock);
+
+	return { parent, input };
+}
+
+//创建for语句的语法树
+std::tuple<std::shared_ptr<ASTNode>, std::string> createForASTNode(std::string input)
+{
+	//解析第一个tk
+	Token tk;
+	std::tie(tk, input) = parseToken(input);
+
+	//如果不是while则报错
+	if (tk.type != TokenType::For)
+	{
+		//报一个错误
+		throw std::runtime_error("error(bad syntax): miss keyword for!\n");
+	}
+
+	//构建父节点
+	auto parent = std::make_shared<ASTNode>();
+	parent->tk = tk;
+
+	//读取一个左括号
+	std::tie(tk, input) = parseToken(input);
+	if (tk.type != TokenType::Lp)
+	{
+		//报一个错误
+		throw std::runtime_error("error(bad syntax): for loop need a (!\n");
+	}
+
+	//循环起始
+	decltype(parent) start;
+	std::tie(start, input) = createExpressionASTNode(input);
+
+	//添加为parent的第1个儿子
+	parent->childs.push_back(start);
+
+	//读取一个;
+	std::tie(tk, input) = parseToken(input);
+	if (tk.type != TokenType::End)
+	{
+		//报一个错误
+		throw std::runtime_error("error(bad syntax): for loop need a ;!\n");
+	}
+
+	//循环终止条件
+	decltype(parent) end;
+	std::tie(end, input) = createExpressionASTNode(input);
+
+	//添加为parent的第2个儿子
+	parent->childs.push_back(end);
+
+	//读取一个;
+	std::tie(tk, input) = parseToken(input);
+	if (tk.type != TokenType::End)
+	{
+		//报一个错误
+		throw std::runtime_error("error(bad syntax): for loop need a ;!\n");
+	}
+
+	//循环步进
+	decltype(parent) increment;
+	std::tie(increment, input) = createExpressionASTNode(input);
+
+	//添加为parent的第3个儿子
+	parent->childs.push_back(increment);
+
+	//读取一个右括号
+	std::tie(tk, input) = parseToken(input);
+	if (tk.type != TokenType::Rp)
+	{
+		//报一个错误
+		throw std::runtime_error("error(bad syntax): for loop need a )!\n");
+	}
+
+	//读取for的循环体
+	decltype(parent) loopblock;
+	std::tie(loopblock, input) = createBlockASTNode(input);
+
+	//添加为parent的第4个儿子
+	parent->childs.push_back(loopblock);
 
 	return { parent, input };
 }
@@ -577,7 +734,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createDefProcASTNode(std::stri
 	parent->tk.type = TokenType::DefProc;
 	//获取并添加函数体
 	decltype(parent) body;
-	std::tie(body, input) = createBlocksASTNode(input);
+	std::tie(body, input) = createBlockASTNode(input);
 	parent->childs.push_back(body);
 	//添加函数名字节点
 	auto procname = std::make_shared<ASTNode>();
@@ -594,7 +751,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createDefProcASTNode(std::stri
 }
 
 //创建语句块的语法树
-std::tuple<std::shared_ptr<ASTNode>, std::string> createBlocksASTNode(std::string input)
+std::tuple<std::shared_ptr<ASTNode>, std::string> createBlockASTNode(std::string input)
 {
 	//解析第一个tk
 	Token tk;
@@ -671,14 +828,32 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createStatementASTNode(std::st
 	//if
 	else if (tk.type == TokenType::If)
 	{
-		//用条件语句的语法解析
+		//用if语句的语法解析
 		std::tie(parent, input) = createIfASTNode(input);
+	}
+	//while
+	else if (tk.type == TokenType::While)
+	{
+		//用while语句的语法解析
+		std::tie(parent, input) = createWhileASTNode(input);
+	}
+	//for
+	else if (tk.type == TokenType::For)
+	{
+		//用For语句的语法解析
+		std::tie(parent, input) = createForASTNode(input);
 	}
 	//语句块
 	else if (tk.type == TokenType::LBrace)
 	{
 		//用语句块的语法解析
-		std::tie(parent, input) = createBlocksASTNode(input);
+		std::tie(parent, input) = createBlockASTNode(input);
+	}
+	//;号
+	else if (tk.type == TokenType::End)
+	{
+		//用语句块的语法解析
+		std::tie(parent, input) = createNOpASTNode(input);
 	}
 	else
 	{

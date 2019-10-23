@@ -207,6 +207,44 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 			result = executeAST(*iter, env);
 		}
 	}
+	//While语句
+	else if (type == TokenType::While)
+	{
+		//获得循环条件
+		auto iter = childs.begin();
+		auto condition = *iter;
+		//获得循环体
+		iter++;
+		auto body = *iter;
+		result = 0;
+		while (executeAST(condition, env) != 0)
+		{
+			//执行循环体
+			result = executeAST(body, env);
+		}
+	}
+	//for语句
+	else if (type == TokenType::While)
+	{
+		//获得循环起始
+		auto iter = childs.begin();
+		auto start = *iter;
+		//获得终止条件
+		iter++;
+		auto end = *iter;
+		//获得步进
+		iter++;
+		auto increment = *iter;
+		//获得循环体
+		iter++;
+		auto body = *iter;
+		result = 0;
+		for (executeAST(start, env); executeAST(end, env) != 0; executeAST(increment, env))
+		{
+			//执行循环体
+			result = executeAST(body, env);
+		}
+	}
 	//原生变量及函数
 	else if (type == TokenType::PrimitiveSymbol)
 	{
@@ -340,6 +378,14 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 			//逐行执行代码(在新环境中)
 			result = executeAST(*iter, &subenv);
 		}
+	}
+	//无操作
+	else if (type == TokenType::End)
+	{
+	}
+	else
+	{
+		throw std::runtime_error("error(bad syntax):\n");
 	}
 
 	if (abs(result) < 1e-10)
