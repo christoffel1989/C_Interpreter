@@ -76,6 +76,11 @@ static std::unordered_map<TokenType, double(*)(double, double)> Op1SelfTable =
 	{TokenType::SelfDiv, astdiv},
 };
 
+//continue跳转抛出的异常
+struct ContinueState {};
+//break跳转抛出的异常
+struct BreakState {};
+
 //执行语法树
 double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 {
@@ -266,7 +271,11 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 			//执行else的语句块
 			iter++;
 			iter++;
-			result = executeAST(*iter, &subenv);
+			//可能不存再else分支所以要判断一下
+			if (iter != childs.end())
+			{
+				result = executeAST(*iter, &subenv);
+			}
 		}
 	}
 	//While语句
@@ -284,10 +293,29 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		iter++;
 		auto body = *iter;
 		result = 0;
+
 		while (executeAST(condition, &subenv) != 0)
 		{
-			//执行循环体
-			result = executeAST(body, &subenv);
+			try
+			{
+				//执行循环体
+				result = executeAST(body, &subenv);
+			}
+			//continue
+			catch (ContinueState)
+			{
+				continue;
+			}
+			//break
+			catch (BreakState)
+			{
+				break;
+			}
+			//错误代码 继续抛出
+			catch (std::exception& e)
+			{
+				throw e;
+			}
 		}
 	}
 	//for语句
@@ -313,9 +341,37 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		result = 0;
 		for (executeAST(start, &subenv); executeAST(end, &subenv) != 0; executeAST(increment, &subenv))
 		{
-			//执行循环体
-			result = executeAST(body, &subenv);
+			try
+			{
+				//执行循环体
+				result = executeAST(body, &subenv);
+			}
+			//continue
+			catch (ContinueState)
+			{
+				continue;
+			}
+			//break
+			catch (BreakState)
+			{
+				break;
+			}
+			//错误代码 继续抛出
+			catch (std::exception& e)
+			{
+				throw e;
+			}
 		}
+	}
+	//break语句
+	else if (type == TokenType::Break)
+	{
+		throw BreakState();
+	}
+	//break语句
+	else if (type == TokenType::Continue)
+	{
+		throw ContinueState();
 	}
 	//return语句
 	else if (type == TokenType::Return)

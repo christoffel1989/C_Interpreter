@@ -59,6 +59,8 @@ enum class TokenType
 	//循环
 	For,
 	While,
+	Break,
+	Continue,
 	//返回
 	Return,
 	//语句块

@@ -35,6 +35,9 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createWhileASTNode(std::string
 //创建for语句的语法树
 std::tuple<std::shared_ptr<ASTNode>, std::string> createForASTNode(std::string input);
 
+//创建break或者continue语句的语法树
+std::tuple<std::shared_ptr<ASTNode>, std::string> createBreakorContinueASTNode(std::string input);
+
 //创建return语句的语法树
 std::tuple<std::shared_ptr<ASTNode>, std::string> createReturnASTNode(std::string input);
 

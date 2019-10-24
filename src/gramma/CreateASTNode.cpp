@@ -696,6 +696,27 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createForASTNode(std::string i
 	return { parent, input };
 }
 
+//创建break或者continue语句的语法树
+std::tuple<std::shared_ptr<ASTNode>, std::string> createBreakorContinueASTNode(std::string input)
+{
+	//解析第一个tk
+	Token tk;
+	std::tie(tk, input) = parseToken(input);
+
+	//如果不是return则报错
+	if (isnoneof(tk.type, TokenType::Break, TokenType::Continue))
+	{
+		//报一个错误
+		throw std::runtime_error("error(bad syntax): miss keyword break or continue!\n");
+	}
+
+	//构建父节点
+	auto parent = std::make_shared<ASTNode>();
+	parent->tk = tk;
+
+	return { parent, input };
+}
+
 //创建return语句的语法树
 std::tuple<std::shared_ptr<ASTNode>, std::string> createReturnASTNode(std::string input)
 {
@@ -866,7 +887,9 @@ static std::unordered_map<TokenType, std::tuple<std::shared_ptr<ASTNode>, std::s
 	{ TokenType::For, createForASTNode },
 	{ TokenType::Return, createReturnASTNode },
 	{ TokenType::LBrace, createBlockASTNode },
-	{ TokenType::End, createNOpASTNode },
+	{ TokenType::Break, createBreakorContinueASTNode },
+	{ TokenType::Continue, createBreakorContinueASTNode },
+	{ TokenType::End, createNOpASTNode }
 };
 
 //创建以;号结尾的一般语句的语法树
