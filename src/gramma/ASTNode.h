@@ -18,13 +18,11 @@ struct ASTNode
 };
 
 //存储AST的环境
-//用户自定义变量或函数
-//是一个元组
-//第一个分量是由输入变量字符串构成的list
-//第二个分量是符号的本体variant类型
+//用户自定义变量或函数 本体是variant
 //当类型为double时,表明symbol是变量 存储了他的值
-//当类型为std::shared_ptr<ASTNode>时，表明symbol时函数 存储了这个函数的语法树
-using UserAST = std::tuple<std::list<std::string>, std::variant<double, std::shared_ptr<ASTNode>>>;
+//当类型为std::tuple<std::list<std::string>, std::shared_ptr<ASTNode>>时，表明symbol时函数
+//其第一个分量是函数的输入变量字符串构成的list 第二个分量是这个函数的语法树
+using UserAST = std::variant<double, std::tuple<std::list<std::string>, std::shared_ptr<ASTNode>>>;
 
 //环境表存储了一些定义了的符号 以及 他的父环境指针
 struct ASTEnvironment

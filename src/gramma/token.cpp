@@ -18,7 +18,8 @@ static std::unordered_map<std::string, TokenType> KeywordTable =
 	{"elseif", TokenType::ElseIf},
 	{"else", TokenType::Else},
 	{"for", TokenType::For},
-	{"while", TokenType::While}
+	{"while", TokenType::While},
+	{"return", TokenType::Return}
 };
 
 //token映射表

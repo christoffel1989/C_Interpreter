@@ -85,8 +85,73 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 	auto& childs = ast->childs;
 	double result;
 
+	//用户自定义的符号
+	if (type == TokenType::UserSymbol)
+	{
+		//获得符号名字
+		auto symbol = std::get<std::string>(tk.value);
+		//如果已经定义了
+		if (auto val = getASTEnvSymbol(symbol, env))
+		{
+			//如果body是值类型则说明为变量
+			if (std::holds_alternative<double>(val.value()))
+			{
+				result = std::get<double>(val.value());
+			}
+			//函数类型
+			else
+			{
+				//解包参数
+				auto[paras, body] = std::get<std::tuple<std::list<std::string>, std::shared_ptr<ASTNode>>>(val.value());
+
+				//构造一个调用函数新的环境
+				ASTEnvironment subenv;
+				//他的父亲时env
+				subenv.parent = env;
+
+				//如果形参和实参数量不匹配则报错
+				if (paras.size() != childs.size())
+				{
+					//报一个错误
+					throw std::runtime_error("error(bad syntax): mismatch argument counts for function call!\n");
+				}
+
+				//求各个函数输入参数的值
+				auto iterast = childs.begin();
+				for (auto iterpara = paras.begin(); iterpara != paras.end(); iterpara++)
+				{
+					//求第i个实参
+					result = executeAST(*iterast, env);
+					//注册第i个实参至subenv中
+					registASTEnvSymbol(*iterpara, result, &subenv);
+					//ast的迭代器步进1
+					iterast++;
+				}
+				//执行body函数(在subenv下)
+				try
+				{
+					result = executeAST(body, &subenv);
+				}
+				//返回值
+				catch (double d)
+				{
+					result = d;
+				}
+				//错误代码 继续抛出
+				catch (std::exception& e)
+				{
+					throw e;
+				}
+			}
+		}
+		else
+		{
+			//抛出异常
+			throw std::runtime_error("error(bad syntax): undefine symbol!\n");
+		}
+	}
 	//查询根节点是否在二元运算表中
-	if (Op2Table.find(type) != Op2Table.end())
+	else if (Op2Table.find(type) != Op2Table.end())
 	{
 		auto iter = childs.begin();
 		if (childs.size() == 2)
@@ -118,16 +183,14 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		auto symbol = std::get<std::string>((*iter)->tk.value);
 		if (auto v = getASTEnvSymbol(symbol, env))
 		{
-			//解包
-			auto[paras, body] = v.value();
-			if (std::holds_alternative<double>(body))
+			if (std::holds_alternative<double>(v.value()))
 			{
-				result = std::get<double>(body);
+				result = std::get<double>(v.value());
 				//计算变量值
 				iter++;
 				result = Op1SelfTable[type](result, executeAST(*iter, env));
 				//更新变量在环境中的值
-				setASTEnvSymbol(symbol, { {}, result }, env);
+				setASTEnvSymbol(symbol, result, env);
 			}
 			//变量类型错误
 			else
@@ -155,7 +218,7 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		//计算变量定义式值
 		result = executeAST(*iter, env);
 		//更新变量在环境中的值
-		setASTEnvSymbol(symbol, { {}, result }, env);
+		setASTEnvSymbol(symbol, result, env);
 	}
 	//数字
 	else if (type == TokenType::Number)
@@ -254,6 +317,14 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 			result = executeAST(body, &subenv);
 		}
 	}
+	//return语句
+	else if (type == TokenType::Return)
+	{
+		//获得循环起始
+		auto iter = childs.begin();
+		//以抛出异常的形式返回
+		throw executeAST(*iter, env);
+	}
 	//无操作
 	else if (type == TokenType::End)
 	{
@@ -268,7 +339,7 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		//计算变量定义式值
 		result = executeAST(*iter, env);
 		//注册变量至环境当中
-		registASTEnvSymbol(symbol, { {}, result }, env);
+		registASTEnvSymbol(symbol, result, env);
 	}
 	//自定义函数
 	else if (type == TokenType::DefProc)
@@ -287,7 +358,7 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 			args.push_back(std::get<std::string>((*iter)->tk.value));
 		}
 		//注册函数至环境当中
-		registASTEnvSymbol(symbol, { args, body }, env);
+		registASTEnvSymbol(symbol, std::make_tuple(args, body), env);
 		//函数定义返回值设置为0
 		result = 0;
 	}
@@ -310,57 +381,6 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		else
 		{
 			result = std::get<double>(primitive);
-		}
-	}
-	//用户自定义的符号
-	else if (type == TokenType::UserSymbol)
-	{
-		//获得符号名字
-		auto symbol = std::get<std::string>(tk.value);
-		//如果已经定义了
-		if (auto val = getASTEnvSymbol(symbol, env))
-		{
-			//解包参数
-			auto[paras, body] = val.value();
-			//如果body是值类型则说明为变量
-			if (std::holds_alternative<double>(body))
-			{
-				result = std::get<double>(body);
-			}
-			//函数类型
-			else
-			{
-				//构造一个调用函数新的环境
-				ASTEnvironment subenv;
-				//他的父亲时env
-				subenv.parent = env;
-
-				//如果形参和实参数量不匹配则报错
-				if (paras.size() != childs.size())
-				{
-					//报一个错误
-					throw std::runtime_error("error(bad syntax): mismatch argument counts for function call!\n");
-				}
-
-				//求各个函数输入参数的值
-				auto iterast = childs.begin();
-				for (auto iterpara = paras.begin(); iterpara != paras.end(); iterpara++)
-				{
-					//求第i个实参
-					result = executeAST(*iterast, env);
-					//注册第i个实参至subenv中
-					registASTEnvSymbol(*iterpara, { {}, result }, &subenv);
-					//ast的迭代器步进1
-					iterast++;
-				}
-				//执行body函数(在subenv下)
-				result = executeAST(std::get<std::shared_ptr<ASTNode>>(body), &subenv);
-			}
-		}
-		else
-		{
-			//抛出异常
-			throw std::runtime_error("error(bad syntax): undefine symbol!\n");
 		}
 	}
 	else

@@ -1,6 +1,8 @@
 ﻿#include "CreateASTNode.h"
 
 #include "AuxFacility.h"
+
+#include <unordered_map>
 #include <stdexcept>
 
 //创建空语句
@@ -615,7 +617,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createForASTNode(std::string i
 	Token tk;
 	std::tie(tk, input) = parseToken(input);
 
-	//如果不是while则报错
+	//如果不是for则报错
 	if (tk.type != TokenType::For)
 	{
 		//报一个错误
@@ -685,6 +687,34 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createForASTNode(std::string i
 
 	//添加为parent的第4个儿子
 	parent->childs.push_back(loopblock);
+
+	return { parent, input };
+}
+
+//创建return语句的语法树
+std::tuple<std::shared_ptr<ASTNode>, std::string> createReturnASTNode(std::string input)
+{
+	//解析第一个tk
+	Token tk;
+	std::tie(tk, input) = parseToken(input);
+
+	//如果不是return则报错
+	if (tk.type != TokenType::Return)
+	{
+		//报一个错误
+		throw std::runtime_error("error(bad syntax): miss keyword return!\n");
+	}
+
+	//构建父节点
+	auto parent = std::make_shared<ASTNode>();
+	parent->tk = tk;
+
+	//解析一个表达式
+	decltype(parent) child;
+	std::tie(child, input) = createExpressionASTNode(input);
+
+	//添加为子节点
+	parent->childs.push_back(child);
 
 	return { parent, input };
 }
@@ -822,6 +852,18 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createBlockASTNode(std::string
 	return { parent, input };
 }
 
+//构建一个映射表
+static std::unordered_map<TokenType, std::tuple<std::shared_ptr<ASTNode>, std::string>(*)(std::string)> ASTNodeMap = 
+{
+	{ TokenType::DefProc, createDefProcASTNode },
+	{ TokenType::If, createIfASTNode },
+	{ TokenType::While, createWhileASTNode },
+	{ TokenType::For, createForASTNode },
+	{ TokenType::Return, createReturnASTNode },
+	{ TokenType::LBrace, createBlockASTNode },
+	{ TokenType::End, createNOpASTNode },
+};
+
 //创建以;号结尾的一般语句的语法树
 std::tuple<std::shared_ptr<ASTNode>, std::string> createStatementASTNode(std::string input)
 {
@@ -832,40 +874,10 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createStatementASTNode(std::st
 	std::string str;
 	std::tie(tk, str) = parseToken(input);
 
-	//定义函数
-	if (tk.type == TokenType::DefProc)
+	//如果在映射表中
+	if (ASTNodeMap.find(tk.type) != ASTNodeMap.end())
 	{
-		std::tie(parent, input) = createDefProcASTNode(input);
-	}
-	//if
-	else if (tk.type == TokenType::If)
-	{
-		//用if语句的语法解析
-		std::tie(parent, input) = createIfASTNode(input);
-	}
-	//while
-	else if (tk.type == TokenType::While)
-	{
-		//用while语句的语法解析
-		std::tie(parent, input) = createWhileASTNode(input);
-	}
-	//for
-	else if (tk.type == TokenType::For)
-	{
-		//用For语句的语法解析
-		std::tie(parent, input) = createForASTNode(input);
-	}
-	//语句块
-	else if (tk.type == TokenType::LBrace)
-	{
-		//用语句块的语法解析
-		std::tie(parent, input) = createBlockASTNode(input);
-	}
-	//;号
-	else if (tk.type == TokenType::End)
-	{
-		//用语句块的语法解析
-		std::tie(parent, input) = createNOpASTNode(input);
+		std::tie(parent, input) = ASTNodeMap[tk.type](input);
 	}
 	else
 	{
