@@ -391,6 +391,11 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		auto iter = childs.begin();
 		//获得变量名字
 		auto symbol = std::get<std::string>((*iter)->tk.value);
+		//如果在当前环境中已经定义则报错
+		if (getASTEnvSymbolInCurrent(symbol, env))
+		{
+			throw std::runtime_error("error(Def var): " + symbol + " redefined!\n");
+		}
 		iter++;
 		//计算变量定义式值
 		result = executeAST(*iter, env);
@@ -406,6 +411,11 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		iter++;
 		//获得函数体的名字
 		auto symbol = std::get<std::string>((*iter)->tk.value);
+		//如果在当前环境中已经定义则报错
+		if (getASTEnvSymbolInCurrent(symbol, env))
+		{
+			throw std::runtime_error("error(Def proc): " + symbol + " redefined!\n");
+		}
 		//获得各个参数的名字
 		std::list<std::string> args;
 		iter++;

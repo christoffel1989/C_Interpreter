@@ -26,6 +26,13 @@ void setASTEnvSymbol(std::string symbol, UserAST value, ASTEnvironment* env)
 	}
 }
 
+//用户自定义符号是否在当前环境中已经存在（主要用于变量和函数的定义）
+bool getASTEnvSymbolInCurrent(std::string symbol, ASTEnvironment* env)
+{
+	//只在当前环境找 不寻找父环境
+	return env->EnvMap.find(symbol) != env->EnvMap.end();
+}
+
 //获得特定名字的函数的实体
 std::optional<UserAST> getASTEnvSymbol(std::string symbol, ASTEnvironment* env)
 {
