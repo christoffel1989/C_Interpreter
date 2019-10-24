@@ -9,6 +9,9 @@ nonrecursive function definition
 recursive function definition
 ![img](https://github.com/christoffel1989/C_Intepretor/blob/master/2.gif)
 
-for loop
+loop
 
 ![img](https://github.com/christoffel1989/C_Intepretor/blob/master/3.gif)
+
+error report
+![img](https://github.com/christoffel1989/C_Intepretor/blob/master/4.gif)
