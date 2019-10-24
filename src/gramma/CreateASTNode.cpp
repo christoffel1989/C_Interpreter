@@ -173,6 +173,11 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 					throw std::runtime_error("error(bad syntax): not enough arguments for function call or function call miss a )!\n");
 				}
 			}
+			//无输入参数 0元函数
+			else
+			{
+				input = res2;
+			}
 		}
 	}
 	else
