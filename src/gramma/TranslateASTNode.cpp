@@ -163,6 +163,21 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		{
 			//计算第1个操作数
 			double val1 = executeAST(*iter, env);
+			//如果是&&或者||则需要判断是否进行短路运算
+			if (type == TokenType::And)
+			{
+				if (val1 == 0)
+				{
+					return 0;
+				}
+			}
+			else if (type == TokenType::Or)
+			{
+				if (val1 != 0)
+				{
+					return 1;
+				}
+			}
 			//迭代器步进1
 			iter++;
 			//计算第2个操作数
