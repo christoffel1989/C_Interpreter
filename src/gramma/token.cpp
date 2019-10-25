@@ -234,7 +234,7 @@ std::tuple<Token, std::string> parseToken(std::string input)
 		}
 		else
 		{
-			tk.type = TokenType::SelfPlus;
+			tk.type = TokenType::Plus;
 		}
 		break;
 	case '-':
@@ -248,7 +248,7 @@ std::tuple<Token, std::string> parseToken(std::string input)
 		}
 		else
 		{
-			tk.type = TokenType::SelfMinus;
+			tk.type = TokenType::Minus;
 		}
 		break;
 	case '*':
