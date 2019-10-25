@@ -224,10 +224,32 @@ std::tuple<Token, std::string> parseToken(std::string input)
 		tk.type = TokenTypeTable[ch];
 		break;
 	case '+':
-		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::SelfPlus;
+		if (*input.begin() == '=')
+		{
+			tk.type = TokenType::SelfPlus;
+		}
+		else if (*input.begin() == '+')
+		{
+			tk.type = TokenType::PlusPlus;
+		}
+		else
+		{
+			tk.type = TokenType::SelfPlus;
+		}
 		break;
 	case '-':
-		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::SelfMinus;
+		if (*input.begin() == '=')
+		{
+			tk.type = TokenType::SelfMinus;
+		}
+		else if (*input.begin() == '-')
+		{
+			tk.type = TokenType::MinusMinus;
+		}
+		else
+		{
+			tk.type = TokenType::SelfMinus;
+		}
 		break;
 	case '*':
 		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::SelfMul;
@@ -302,7 +324,8 @@ std::tuple<Token, std::string> parseToken(std::string input)
 
 	//这三种情况多吃了一个等号需要删掉
 	if (isoneof(tk.type, TokenType::NotLess, TokenType::NotGreat, TokenType::Equal, TokenType::NotEqual, TokenType::And, 
-						 TokenType::Or, TokenType::SelfPlus, TokenType::SelfMinus, TokenType::SelfMul, TokenType::SelfDiv))
+						 TokenType::Or, TokenType::SelfPlus, TokenType::SelfMinus, TokenType::SelfMul, TokenType::SelfDiv, 
+						 TokenType::MinusMinus, TokenType::PlusPlus))
 	{
 		input.erase(input.begin());
 	}

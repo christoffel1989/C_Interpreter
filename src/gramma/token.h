@@ -21,6 +21,13 @@ enum class TokenType
 	SelfMinus,
 	SelfMul,
 	SelfDiv,
+	//自增自减
+	PlusPlus,
+	MinusMinus,
+	Increment,
+	PostIncrement,
+	Decrement,
+	PostDecrement,
 	//关系运算符
 	Less,
 	Great,

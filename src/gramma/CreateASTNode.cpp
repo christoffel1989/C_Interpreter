@@ -59,6 +59,27 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 		std::tie(child, input) = createFactorASTNode(input);
 		parent->childs.push_back(child);
 	}
+	//++
+	else if (tk.type == TokenType::PlusPlus)
+	{
+		//读下一个token
+		tie(tk, input) = parseToken(input);
+		//如果不是自定义变量
+		if (tk.type != TokenType::UserSymbol)
+		{
+			//报一个错误
+			throw std::runtime_error("error(bad syntax): ++ must be followed by variable!\n");
+		}
+
+		//创建父节点
+		parent = std::make_shared<ASTNode>();
+		//设置父节点token
+		parent->tk.type = TokenType::Increment;
+		//创建一个子节点存储自加的变量名
+		auto child = std::make_shared<ASTNode>();
+		child->tk = tk;
+		parent->childs.push_back(child);
+	}
 	//负号
 	else if (tk.type == TokenType::Minus)
 	{
@@ -69,6 +90,27 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 		//创建一个子节点是接下来的一个符号
 		std::shared_ptr<ASTNode> child;
 		std::tie(child, input) = createFactorASTNode(input);
+		parent->childs.push_back(child);
+	}
+	//--
+	else if (tk.type == TokenType::MinusMinus)
+	{
+		//读下一个token
+		tie(tk, input) = parseToken(input);
+		//如果不是自定义变量
+		if (tk.type != TokenType::UserSymbol)
+		{
+			//报一个错误
+			throw std::runtime_error("error(bad syntax): -- must be followed by variable!\n");
+		}
+
+		//创建父节点
+		parent = std::make_shared<ASTNode>();
+		//设置父节点token
+		parent->tk.type = TokenType::Decrement;
+		//创建一个子节点存储自加的变量名
+		auto child = std::make_shared<ASTNode>();
+		child->tk = tk;
 		parent->childs.push_back(child);
 	}
 	//!号
@@ -178,6 +220,16 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 			{
 				input = res2;
 			}
+		}
+		//如果是++
+		else if (isoneof(tk.type, TokenType::PlusPlus, TokenType::MinusMinus))
+		{
+			auto child = parent;
+			parent = std::make_shared<ASTNode>();
+			parent->tk.type = (tk.type == TokenType::PlusPlus) ? TokenType::PostIncrement : TokenType::PostDecrement;
+			parent->childs.push_back(child);
+			//补回丢掉的变量
+			input = res1;
 		}
 	}
 	else

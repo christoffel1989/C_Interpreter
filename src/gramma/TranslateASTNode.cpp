@@ -225,6 +225,106 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		//更新变量在环境中的值
 		setASTEnvSymbol(symbol, result, env);
 	}
+	else if (type == TokenType::Increment)
+	{
+		//获得符号名字
+		auto symbol = std::get<std::string>((*childs.begin())->tk.value);
+		if (auto v = getASTEnvSymbol(symbol, env))
+		{
+			if (std::holds_alternative<double>(v.value()))
+			{
+				//先加1再赋值
+				result = std::get<double>(v.value()) + 1;
+				//更新变量在环境中的值
+				setASTEnvSymbol(symbol, result, env);
+			}
+			//变量类型错误
+			else
+			{
+				throw std::runtime_error("error(++): the symbol is not variable!\n");
+			}
+		}
+		//如果查不到这个变量则报错
+		else
+		{
+			throw std::runtime_error("error(++): undefine symbol!\n");
+		}
+	}
+	else if (type == TokenType::PostIncrement)
+	{
+		//获得符号名字
+		auto symbol = std::get<std::string>((*childs.begin())->tk.value);
+		if (auto v = getASTEnvSymbol(symbol, env))
+		{
+			if (std::holds_alternative<double>(v.value()))
+			{
+				//先赋值
+				result = std::get<double>(v.value());
+				//再加1更新变量在环境中的值
+				setASTEnvSymbol(symbol, result + 1, env);
+			}
+			//变量类型错误
+			else
+			{
+				throw std::runtime_error("error(++): the symbol is not variable!\n");
+			}
+		}
+		//如果查不到这个变量则报错
+		else
+		{
+			throw std::runtime_error("error(++): undefine symbol!\n");
+		}
+	}
+	else if (type == TokenType::Decrement)
+	{
+		//获得符号名字
+		auto symbol = std::get<std::string>((*childs.begin())->tk.value);
+		if (auto v = getASTEnvSymbol(symbol, env))
+		{
+			if (std::holds_alternative<double>(v.value()))
+			{
+				//先加1再赋值
+				result = std::get<double>(v.value()) - 1;
+				//更新变量在环境中的值
+				setASTEnvSymbol(symbol, result, env);
+			}
+			//变量类型错误
+			else
+			{
+				throw std::runtime_error("error(--): the symbol is not variable!\n");
+			}
+		}
+		//如果查不到这个变量则报错
+		else
+		{
+			throw std::runtime_error("error(--): undefine symbol!\n");
+		}
+	}
+	else if (type == TokenType::PostDecrement)
+	{
+		//获得符号名字
+		auto symbol = std::get<std::string>((*childs.begin())->tk.value);
+		if (auto v = getASTEnvSymbol(symbol, env))
+		{
+			if (std::holds_alternative<double>(v.value()))
+			{
+				//先赋值
+				result = std::get<double>(v.value());
+				//再减1更新变量在环境中的值
+				setASTEnvSymbol(symbol, result - 1, env);
+			}
+			//变量类型错误
+			else
+			{
+				throw std::runtime_error("error(--): the symbol is not variable!\n");
+			}
+		}
+		//如果查不到这个变量则报错
+		else
+		{
+			throw std::runtime_error("error(--): undefine symbol!\n");
+		}
+	}
 	//数字
 	else if (type == TokenType::Number)
 	{
