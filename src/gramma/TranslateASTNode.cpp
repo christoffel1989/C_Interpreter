@@ -8,20 +8,20 @@
 
 //翻译一元运算节点的模板
 template<typename OP>
-double translateOp1AST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env, OP op)
+double translateOp1AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op)
 {
 	double result;
 	auto iter = ast->childs.begin();
 	//获得变量名字
 	auto symbol = std::get<std::string>((*iter)->tk.value);
-	if (auto v = getASTEnvSymbol(symbol, env))
+	if (auto v = getEnvSymbol(symbol, env))
 	{
 		if (std::holds_alternative<double>(v.value()))
 		{
 			//计算变量值
 			result = op(std::get<double>(v.value()), executeAST(*(++iter), env));
 			//更新变量在环境中的值
-			setASTEnvSymbol(symbol, result, env);
+			setEnvSymbol(symbol, result, env);
 		}
 		//变量类型错误
 		else
@@ -74,7 +74,7 @@ double astmod(double a, double b)
 
 //翻译二元运算节点的模板
 template<typename OP, typename PRED>
-double translateOp2AST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env, OP op, PRED pred)
+double translateOp2AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op, PRED pred)
 {
 	auto iter = ast->childs.begin();
 	if (ast->childs.size() == 2)
@@ -98,12 +98,12 @@ double translateOp2AST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env, OP op,
 
 //翻译自增自运算节点的模板
 template<bool post, typename OP>
-double translateIncrementAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env, OP op)
+double translateIncrementAST(std::shared_ptr<ASTNode> ast, Environment* env, OP op)
 {
 	double prev, after;
 	//获得符号名字
 	auto symbol = std::get<std::string>((*(ast->childs.begin()))->tk.value);
-	if (auto v = getASTEnvSymbol(symbol, env))
+	if (auto v = getEnvSymbol(symbol, env))
 	{
 		if (std::holds_alternative<double>(v.value()))
 		{
@@ -111,7 +111,7 @@ double translateIncrementAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env, 
 			prev = std::get<double>(v.value());
 			after = op(prev);
 			//再加1更新变量在环境中的值
-			setASTEnvSymbol(symbol, after, env);
+			setEnvSymbol(symbol, after, env);
 		}
 		//变量类型错误
 		else
@@ -129,13 +129,13 @@ double translateIncrementAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env, 
 }
 
 //翻译赋值符号节点
-double translateAssignAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+double translateAssignAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	auto iter = ast->childs.begin();
 	//获得变量名字
 	auto symbol = std::get<std::string>((*iter)->tk.value);
 	//如果查不到这个变量则报错
-	if (!getASTEnvSymbol(symbol, env))
+	if (!getEnvSymbol(symbol, env))
 	{
 		throw std::runtime_error("error(assignment): undefine symbol!\n");
 	}
@@ -143,16 +143,16 @@ double translateAssignAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 	//计算变量定义式值
 	auto result = executeAST(*iter, env);
 	//更新变量在环境中的值
-	setASTEnvSymbol(symbol, result, env);
+	setEnvSymbol(symbol, result, env);
 
 	return result;
 }
 
-double translateBlockAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+double translateBlockAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	auto& childs = ast->childs;
 	//构造一个调用函数新的环境
-	ASTEnvironment subenv;
+	Environment subenv;
 	//他的父亲时env
 	subenv.parent = env;
 	double result = 0;
@@ -165,10 +165,10 @@ double translateBlockAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 }
 
 //翻译if语句节点
-double translateIfAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+double translateIfAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	//构造一个调用函数新的环境
-	ASTEnvironment subenv;
+	Environment subenv;
 	//他的父亲时env
 	subenv.parent = env;
 
@@ -200,10 +200,10 @@ struct ContinueState {};
 struct BreakState {};
 
 //翻译for语句节点
-double translateForAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+double translateForAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	//构造一个调用函数新的环境
-	ASTEnvironment subenv;
+	Environment subenv;
 	//他的父亲时env
 	subenv.parent = env;
 
@@ -246,10 +246,10 @@ double translateForAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 }
 
 //翻译while语句节点
-double translateWhileAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+double translateWhileAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	//构造一个调用函数新的环境
-	ASTEnvironment subenv;
+	Environment subenv;
 	//他的父亲时env
 	subenv.parent = env;
 
@@ -288,27 +288,27 @@ double translateWhileAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 }
 
 //翻译定义变量节点
-double translateDefVarAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+double translateDefVarAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	//自定义变量
 	auto iter = ast->childs.begin();
 	//获得变量名字
 	auto symbol = std::get<std::string>((*iter)->tk.value);
 	//如果在当前环境中已经定义则报错
-	if (getASTEnvSymbolInCurrent(symbol, env))
+	if (getEnvSymbolInCurrent(symbol, env))
 	{
 		throw std::runtime_error("error(Def var): " + symbol + " redefined!\n");
 	}
 	//计算变量定义式值
 	auto result = executeAST(*(++iter), env);
 	//注册变量至环境当中
-	registASTEnvSymbol(symbol, result, env);
+	registEnvSymbol(symbol, result, env);
 	
 	return result;
 }
 
 //翻译定义函数节点
-double translateDefProcAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+double translateDefProcAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	auto& childs = ast->childs;
 	auto iter = childs.begin();
@@ -318,7 +318,7 @@ double translateDefProcAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 	//获得函数体的名字
 	auto symbol = std::get<std::string>((*iter)->tk.value);
 	//如果在当前环境中已经定义则报错
-	if (getASTEnvSymbolInCurrent(symbol, env))
+	if (getEnvSymbolInCurrent(symbol, env))
 	{
 		throw std::runtime_error("error(Def proc): " + symbol + " redefined!\n");
 	}
@@ -330,14 +330,14 @@ double translateDefProcAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 		args.push_back(std::get<std::string>((*iter)->tk.value));
 	}
 	//注册函数至环境当中
-	registASTEnvSymbol(symbol, std::make_tuple(args, body), env);
+	registEnvSymbol(symbol, std::make_tuple(args, body), env);
 
 	//函数定义返回值设置为0
 	return 0;
 }
 
 //翻译系统自定义符号节点
-double translatePrimitiveSymboAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+double translatePrimitiveSymboAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	auto tk = ast->tk;
 	auto& childs = ast->childs;
@@ -365,7 +365,7 @@ double translatePrimitiveSymboAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* 
 }
 
 //翻译usersymbol节点
-double translateUserSymbolAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+double translateUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	auto tk = ast->tk;
 	auto& childs = ast->childs;
@@ -374,7 +374,7 @@ double translateUserSymbolAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 	//获得符号名字
 	auto symbol = std::get<std::string>(tk.value);
 	//如果已经定义了
-	if (auto val = getASTEnvSymbol(symbol, env))
+	if (auto val = getEnvSymbol(symbol, env))
 	{
 		//如果body是值类型则说明为变量
 		if (std::holds_alternative<double>(val.value()))
@@ -388,7 +388,7 @@ double translateUserSymbolAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 			auto[paras, body] = std::get<std::tuple<std::list<std::string>, std::shared_ptr<ASTNode>>>(val.value());
 
 			//构造一个调用函数新的环境
-			ASTEnvironment subenv;
+			Environment subenv;
 			//他的父亲时env
 			subenv.parent = env;
 
@@ -406,7 +406,7 @@ double translateUserSymbolAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 				//求第i个实参
 				result = executeAST(*iterast, env);
 				//注册第i个实参至subenv中
-				registASTEnvSymbol(*iterpara, result, &subenv);
+				registEnvSymbol(*iterpara, result, &subenv);
 				//ast的迭代器步进1
 				iterast++;
 			}
@@ -440,7 +440,7 @@ double translateUserSymbolAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 static auto ignorepred = [](double) { return false; };
 //简写
 using PAST = std::shared_ptr<ASTNode>;
-using PENV = ASTEnvironment*;
+using PENV = Environment*;
 //映射表
 static std::unordered_map<TokenType, std::function<double(PAST, PENV)>> ASTTable
 {
@@ -484,7 +484,7 @@ static std::unordered_map<TokenType, std::function<double(PAST, PENV)>> ASTTable
 };
 
 //执行语法树
-double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+double executeAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	double result;
 	//根据驱动表执行执行对应的函数

@@ -10,7 +10,7 @@
 int main(int argc, char* argv[])
 {
 	//构造全局环境
-	ASTEnvironment GlobalEnv;
+	Environment GlobalEnv;
 
 	std::cout << "Hello! Welcome to use this small c-like code intepretor!" << std::endl;
 	while (true)
@@ -68,7 +68,7 @@ int main(int argc, char* argv[])
 						if (tk.type == TokenType::UserSymbol)
 						{
 							auto symbol = std::get<std::string>(tk.value);
-							if (auto v = getASTEnvSymbol(symbol, &GlobalEnv))
+							if (auto v = getEnvSymbol(symbol, &GlobalEnv))
 							{
 								//如果是变量
 								if (std::holds_alternative<double>(v.value()))

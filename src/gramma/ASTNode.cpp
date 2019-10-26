@@ -3,14 +3,14 @@
 #include <iostream>
 
 //注册新的变量或函数在当前环境
-void registASTEnvSymbol(std::string symbol, UserAST value, ASTEnvironment* env)
+void registEnvSymbol(std::string symbol, UserAST value, Environment* env)
 {
 	//只在当前环境中设置
 	env->EnvMap[symbol] = value;
 }
 
 //设置用户自定义符号(变量或函数)的值
-void setASTEnvSymbol(std::string symbol, UserAST value, ASTEnvironment* env)
+void setEnvSymbol(std::string symbol, UserAST value, Environment* env)
 {
 	//查找
 	auto iter = env->EnvMap.find(symbol);
@@ -22,19 +22,19 @@ void setASTEnvSymbol(std::string symbol, UserAST value, ASTEnvironment* env)
 	//到父亲中设置
 	else if (env->parent)
 	{
-		setASTEnvSymbol(symbol, value, env->parent);
+		setEnvSymbol(symbol, value, env->parent);
 	}
 }
 
 //用户自定义符号是否在当前环境中已经存在（主要用于变量和函数的定义）
-bool getASTEnvSymbolInCurrent(std::string symbol, ASTEnvironment* env)
+bool getEnvSymbolInCurrent(std::string symbol, Environment* env)
 {
 	//只在当前环境找 不寻找父环境
 	return env->EnvMap.find(symbol) != env->EnvMap.end();
 }
 
 //获得特定名字的函数的实体
-std::optional<UserAST> getASTEnvSymbol(std::string symbol, ASTEnvironment* env)
+std::optional<UserAST> getEnvSymbol(std::string symbol, Environment* env)
 {
 	//查找
 	auto iter = env->EnvMap.find(symbol);
@@ -46,7 +46,7 @@ std::optional<UserAST> getASTEnvSymbol(std::string symbol, ASTEnvironment* env)
 	//如果存在父环境 则继续查询父环境
 	else if (env->parent)
 	{
-		return getASTEnvSymbol(symbol, env->parent);
+		return getEnvSymbol(symbol, env->parent);
 	}
 	else
 	{
