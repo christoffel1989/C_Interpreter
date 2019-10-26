@@ -5,17 +5,16 @@
 #include <unordered_map>
 #include <stdexcept>
 
-//变长参数模板 没有获得预期type的token则报错 报错内容为error
+//变长参数模板 没有获得预期type的token则报错 报错内容为error(以异常的形式抛出)
 template <typename... TS>
-inline std::tuple<Token, std::string> expectToken(std::string input, std::string error, TS... expects)
+inline std::tuple<Token, std::string> expectToken(std::string input, std::string error, TS... expects) noexcept(false)
 {
-	auto[tk, res] = parseToken(std::move(input));
-	if (isnoneof(tk.type, expects...))
+	auto pack = parseToken(std::move(input));
+	if (isnoneof(std::get<0>(pack).type, expects...))
 	{
 		throw std::runtime_error(error + "\n");
 	}
-
-	return { tk, res };
+	return pack;
 }
 
 //创建空语句
