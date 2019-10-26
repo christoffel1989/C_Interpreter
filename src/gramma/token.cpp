@@ -19,6 +19,7 @@ static std::unordered_map<std::string, TokenType> KeywordTable =
 	{"else", TokenType::Else},
 	{"for", TokenType::For},
 	{"while", TokenType::While},
+	{"do", TokenType::Do},
 	{"break", TokenType::Break},
 	{"continue", TokenType::Continue},
 	{"return", TokenType::Return}

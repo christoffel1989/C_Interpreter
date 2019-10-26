@@ -66,6 +66,7 @@ enum class TokenType
 	//循环
 	For,
 	While,
+	Do,
 	Break,
 	Continue,
 	//返回

@@ -438,6 +438,54 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 	return { parent, input };
 }
 
+//创建语句块的语法树
+std::tuple<std::shared_ptr<ASTNode>, std::string> createBlockASTNode(std::string input)
+{
+	Token tk;
+	std::string str;
+
+	//读取左大括号
+	std::tie(tk, input) = expectToken(input, "error(bad syntax): miss a {!", TokenType::LBrace);
+
+	auto parent = std::make_shared<ASTNode>();
+	parent->tk.type = TokenType::Block;
+	//不停的解析语句
+	do
+	{
+		std::shared_ptr<ASTNode> child;
+		std::tie(child, input) = createStatementASTNode(input);
+		parent->childs.push_back(child);
+		//再解析一个tk
+		std::tie(tk, str) = parseToken(input);
+		//不是Block、IF、While、For等特殊语句的情况下
+		if (isnoneof(child->tk.type, TokenType::Block, TokenType::If, TokenType::While, TokenType::Do, TokenType::For))
+		{
+			if (tk.type != TokenType::End)
+			{
+				//结尾不是;语法错误
+				throw std::runtime_error("error(bad syntax): miss a ;!\n");
+			}
+			else
+			{
+				input = str;
+			}
+		}
+		//再解析一个tk
+		std::tie(tk, str) = parseToken(input);
+	} while (tk.type != TokenType::RBrace);
+
+	//如果不是右大括号则报错
+	if (tk.type != TokenType::RBrace)
+	{
+		//报一个错误
+		throw std::runtime_error("error(bad syntax): miss a }!\n");
+	}
+
+	input = str;
+
+	return { parent, input };
+}
+
 //创建条件语句的语法树
 std::tuple<std::shared_ptr<ASTNode>, std::string> createIfASTNode(std::string input)
 {
@@ -579,6 +627,47 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createWhileASTNode(std::string
 
 	//添加为parent的第2个儿子
 	parent->childs.push_back(loopblock);
+
+	return { parent, input };
+}
+
+//创建DoWhile语句的语法树
+std::tuple<std::shared_ptr<ASTNode>, std::string> createDoWhileASTNode(std::string input)
+{
+	Token tk;
+
+	//读取关键字do
+	std::tie(tk, input) = expectToken(input, "error(bad syntax): miss keyword do!", TokenType::Do);
+
+	//构建父节点
+	auto parent = std::make_shared<ASTNode>();
+	parent->tk.type = TokenType::Do;
+
+	//读取do while的循环体
+	decltype(parent) loopblock;
+	std::tie(loopblock, input) = createBlockASTNode(input);
+
+	//添加为parent的第1个儿子
+	parent->childs.push_back(loopblock);
+
+	//读取关键字while
+	std::tie(tk, input) = expectToken(input, "error(bad syntax): miss keyword while!", TokenType::While);
+
+	//读取左括号
+	std::tie(tk, input) = expectToken(input, "error(bad syntax): do while loop condition need a (!", TokenType::Lp);
+
+	//循环条件
+	decltype(parent) loopcondition;
+	std::tie(loopcondition, input) = createExpressionASTNode(input);
+
+	//添加为parent的第2个儿子
+	parent->childs.push_back(loopcondition);
+
+	//读取右括号
+	std::tie(tk, input) = expectToken(input, "error(bad syntax): do while loop condition need a )", TokenType::Rp);
+
+	//读取分号
+	std::tie(tk, input) = expectToken(input, "error(bad syntax): miss a ;", TokenType::End);
 
 	return { parent, input };
 }
@@ -739,60 +828,13 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createDefProcASTNode(std::stri
 	return { parent, input };
 }
 
-//创建语句块的语法树
-std::tuple<std::shared_ptr<ASTNode>, std::string> createBlockASTNode(std::string input)
-{
-	Token tk;
-	std::string str;
-
-	//读取左大括号
-	std::tie(tk, input) = expectToken(input, "error(bad syntax): miss a {!", TokenType::LBrace);
-
-	auto parent = std::make_shared<ASTNode>();
-	parent->tk.type = TokenType::Block;
-	//不停的解析语句
-	do
-	{
-		std::shared_ptr<ASTNode> child;
-		std::tie(child, input) = createStatementASTNode(input);
-		parent->childs.push_back(child);
-		//再解析一个tk
-		std::tie(tk, str) = parseToken(input);
-		//不是Block、IF、While、For等特殊语句的情况下
-		if (isnoneof(child->tk.type, TokenType::Block, TokenType::If, TokenType::While, TokenType::For))
-		{
-			if (tk.type != TokenType::End)
-			{
-				//结尾不是;语法错误
-				throw std::runtime_error("error(bad syntax): miss a ;!\n");
-			}
-			else
-			{
-				input = str;
-			}
-		}
-		//再解析一个tk
-		std::tie(tk, str) = parseToken(input);
-	} while (tk.type != TokenType::RBrace);
-
-	//如果不是右大括号则报错
-	if (tk.type != TokenType::RBrace)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): miss a }!\n");
-	}
-
-	input = str;
-
-	return { parent, input };
-}
-
 //构建一个映射表
 static std::unordered_map<TokenType, std::tuple<std::shared_ptr<ASTNode>, std::string>(*)(std::string)> ASTNodeMap = 
 {
 	{ TokenType::DefProc, createDefProcASTNode },
 	{ TokenType::If, createIfASTNode },
 	{ TokenType::While, createWhileASTNode },
+	{ TokenType::Do, createDoWhileASTNode },
 	{ TokenType::For, createForASTNode },
 	{ TokenType::Return, createReturnASTNode },
 	{ TokenType::LBrace, createBlockASTNode },
@@ -807,9 +849,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createStatementASTNode(std::st
 	std::shared_ptr<ASTNode> parent;
 
 	//解析第一个tk
-	Token tk;
-	std::string str;
-	std::tie(tk, str) = parseToken(input);
+	auto[tk, res] = parseToken(input);
 
 	//如果在映射表中
 	if (ASTNodeMap.find(tk.type) != ASTNodeMap.end())

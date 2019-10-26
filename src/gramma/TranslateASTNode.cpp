@@ -199,26 +199,22 @@ struct ContinueState {};
 //break跳转抛出的异常
 struct BreakState {};
 
-//翻译for语句节点
-double translateForAST(std::shared_ptr<ASTNode> ast, Environment* env)
+//翻译while语句节点
+double translateWhileAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	//构造一个调用函数新的环境
 	Environment subenv;
 	//他的父亲时env
 	subenv.parent = env;
 
-	//获得循环起始
+	//获得循环条件
 	auto iter = ast->childs.begin();
-	auto start = *iter;
-	//获得终止条件
-	auto end = *(++iter);
-	//获得步进
-	auto increment = *(++iter);
+	auto condition = *iter;
 	//获得循环体
 	auto body = *(++iter);
-
+	
 	double result = 0;
-	for (executeAST(start, &subenv); executeAST(end, &subenv) != 0; executeAST(increment, &subenv))
+	while (executeAST(condition, &subenv) != 0)
 	{
 		try
 		{
@@ -245,22 +241,68 @@ double translateForAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	return result;
 }
 
-//翻译while语句节点
-double translateWhileAST(std::shared_ptr<ASTNode> ast, Environment* env)
+//翻译do while语句节点
+double translateDoWhileAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	//构造一个调用函数新的环境
 	Environment subenv;
 	//他的父亲时env
 	subenv.parent = env;
 
-	//获得循环条件
+	//获得循环体
 	auto iter = ast->childs.begin();
-	auto condition = *iter;
+	auto body = *iter;
+	//获得条件
+	auto condition = *(++iter);
+
+	double result = 0;
+	do
+	{
+		try
+		{
+			//执行循环体
+			result = executeAST(body, &subenv);
+		}
+		//continue
+		catch (ContinueState)
+		{
+			continue;
+		}
+		//break
+		catch (BreakState)
+		{
+			break;
+		}
+		//错误代码 继续抛出
+		catch (std::exception& e)
+		{
+			throw e;
+		}
+	} while (executeAST(condition, &subenv) != 0);
+
+	return result;
+}
+
+//翻译for语句节点
+double translateForAST(std::shared_ptr<ASTNode> ast, Environment* env)
+{
+	//构造一个调用函数新的环境
+	Environment subenv;
+	//他的父亲时env
+	subenv.parent = env;
+
+	//获得循环起始
+	auto iter = ast->childs.begin();
+	auto start = *iter;
+	//获得终止条件
+	auto end = *(++iter);
+	//获得步进
+	auto increment = *(++iter);
 	//获得循环体
 	auto body = *(++iter);
-	
+
 	double result = 0;
-	while (executeAST(condition, &subenv) != 0)
+	for (executeAST(start, &subenv); executeAST(end, &subenv) != 0; executeAST(increment, &subenv))
 	{
 		try
 		{
@@ -470,8 +512,9 @@ static std::unordered_map<TokenType, std::function<double(PAST, PENV)>> ASTTable
 	{ TokenType::Assign, translateAssignAST },
 	{ TokenType::Block, translateBlockAST },
 	{ TokenType::If, translateIfAST },
-	{ TokenType::For, translateForAST },
 	{ TokenType::While, translateWhileAST },
+	{ TokenType::Do, translateDoWhileAST },
+	{ TokenType::For, translateForAST },
 	{ TokenType::DefVar, translateDefVarAST },
 	{ TokenType::DefProc, translateDefProcAST },
 	{ TokenType::Number, [](PAST ast, PENV env) { return std::get<double>(ast->tk.value); } },
