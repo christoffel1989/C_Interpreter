@@ -5,6 +5,19 @@
 #include <unordered_map>
 #include <stdexcept>
 
+//没有获得预期type的token则报错 报错内容为error
+template <typename TS>
+inline std::string expectToken(TS ts, std::string input, std::string error)
+{
+	auto[tk, res] = parseToken(std::move(input));
+	if (isnoneof(tk.type, ts))
+	{
+		throw std::runtime_error(error + "\n");
+	}
+
+	return res;
+}
+
 //创建空语句
 std::tuple<std::shared_ptr<ASTNode>, std::string> createNOpASTNode(std::string input)
 {
@@ -477,28 +490,17 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 //创建条件语句的语法树
 std::tuple<std::shared_ptr<ASTNode>, std::string> createIfASTNode(std::string input)
 {
-	//解析第一个tk
 	Token tk;
-	std::tie(tk, input) = parseToken(input);
 
-	//如果不是if则报错
-	if (tk.type != TokenType::If)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): miss keyword if!\n");
-	}
+	//读取关键字if
+	input = expectToken(TokenType::If, input, "error(bad syntax): miss keyword if!");
 
 	//构建父节点
 	auto parent = std::make_shared<ASTNode>();
-	parent->tk = tk;
+	parent->tk.type = TokenType::If;
 
-	//读取一个左括号
-	std::tie(tk, input) = parseToken(input);
-	if (tk.type != TokenType::Lp)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): if condition need a (!\n");
-	}
+	//读取左括号
+	input = expectToken(TokenType::Lp, input, "error(bad syntax): if condition need a (!");
 
 	//读取条件
 	decltype(parent) ifcondition;
@@ -507,13 +509,8 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createIfASTNode(std::string in
 	//添加为parent的第1个儿子
 	parent->childs.push_back(ifcondition);
 
-	//读取一个右括号
-	std::tie(tk, input) = parseToken(input);
-	if (tk.type != TokenType::Rp)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): if condition need a )!\n");
-	}
+	//读取右括号
+	input = expectToken(TokenType::Rp, input, "error(bad syntax): if condition need a )!");
 
 	//读取if成立的block
 	decltype(parent) ifblock;
@@ -548,28 +545,17 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createIfASTNode(std::string in
 //创建条件语句的语法树
 std::tuple<std::shared_ptr<ASTNode>, std::string> createElseIfASTNode(std::string input)
 {
-	//解析第一个tk
 	Token tk;
-	std::tie(tk, input) = parseToken(input);
 
-	//如果不是if则报错
-	if (tk.type != TokenType::ElseIf)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): miss keyword elseif!\n");
-	}
+	//读取关键字elseif
+	input = expectToken(TokenType::ElseIf, input, "error(bad syntax): miss keyword elseif!");
 
 	//构建父节点
 	auto parent = std::make_shared<ASTNode>();
 	parent->tk.type = TokenType::If;
 
-	//读取一个左括号
-	std::tie(tk, input) = parseToken(input);
-	if (tk.type != TokenType::Lp)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): else if condition need a (!\n");
-	}
+	//读取左括号
+	input = expectToken(TokenType::Lp, input, "error(bad syntax): elseif condition need a (!");
 
 	//读取条件
 	decltype(parent) ifcondition;
@@ -578,13 +564,8 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createElseIfASTNode(std::strin
 	//添加为parent的第1个儿子
 	parent->childs.push_back(ifcondition);
 
-	//读取一个右括号
-	std::tie(tk, input) = parseToken(input);
-	if (tk.type != TokenType::Rp)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): else if condition need a )!\n");
-	}
+	//读取右括号
+	input = expectToken(TokenType::Rp, input, "error(bad syntax): elseif condition need a )!");
 
 	//读取if成立的block
 	decltype(parent) ifblock;
@@ -619,28 +600,17 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createElseIfASTNode(std::strin
 //创建while语句的语法树
 std::tuple<std::shared_ptr<ASTNode>, std::string> createWhileASTNode(std::string input)
 {
-	//解析第一个tk
 	Token tk;
-	std::tie(tk, input) = parseToken(input);
 
-	//如果不是while则报错
-	if (tk.type != TokenType::While)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): miss keyword while!\n");
-	}
+	//读取关键字while
+	input = expectToken(TokenType::While, input, "error(bad syntax): miss keyword while!");
 
 	//构建父节点
 	auto parent = std::make_shared<ASTNode>();
-	parent->tk = tk;
+	parent->tk.type = TokenType::While;
 
-	//读取一个左括号
-	std::tie(tk, input) = parseToken(input);
-	if (tk.type != TokenType::Lp)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): while loop need a (!\n");
-	}
+	//读取左括号
+	input = expectToken(TokenType::Lp, input, "error(bad syntax): while loop condition need a (!");
 
 	//循环条件
 	decltype(parent) loopcondition;
@@ -649,13 +619,8 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createWhileASTNode(std::string
 	//添加为parent的第1个儿子
 	parent->childs.push_back(loopcondition);
 
-	//读取一个右括号
-	std::tie(tk, input) = parseToken(input);
-	if (tk.type != TokenType::Rp)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): while loop need a )!\n");
-	}
+	//读取右括号
+	input = expectToken(TokenType::Rp, input, "error(bad syntax): while loop condition need a )!");
 
 	//读取while的循环体
 	decltype(parent) loopblock;
@@ -670,28 +635,17 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createWhileASTNode(std::string
 //创建for语句的语法树
 std::tuple<std::shared_ptr<ASTNode>, std::string> createForASTNode(std::string input)
 {
-	//解析第一个tk
 	Token tk;
-	std::tie(tk, input) = parseToken(input);
 
-	//如果不是for则报错
-	if (tk.type != TokenType::For)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): miss keyword for!\n");
-	}
+	//读取关键字for
+	input = expectToken(TokenType::For, input, "error(bad syntax): miss keyword while!");
 
 	//构建父节点
 	auto parent = std::make_shared<ASTNode>();
-	parent->tk = tk;
+	parent->tk.type = TokenType::For;
 
-	//读取一个左括号
-	std::tie(tk, input) = parseToken(input);
-	if (tk.type != TokenType::Lp)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): for loop need a (!\n");
-	}
+	//读取左括号
+	input = expectToken(TokenType::Lp, input, "error(bad syntax): for loop condition need a (!");
 
 	//循环起始
 	decltype(parent) start;
@@ -700,13 +654,8 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createForASTNode(std::string i
 	//添加为parent的第1个儿子
 	parent->childs.push_back(start);
 
-	//读取一个;
-	std::tie(tk, input) = parseToken(input);
-	if (tk.type != TokenType::End)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): for loop need a ;!\n");
-	}
+	//读取分号
+	input = expectToken(TokenType::End, input, "error(bad syntax): for loop need a ;!");
 
 	//循环终止条件
 	decltype(parent) end;
@@ -715,13 +664,8 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createForASTNode(std::string i
 	//添加为parent的第2个儿子
 	parent->childs.push_back(end);
 
-	//读取一个;
-	std::tie(tk, input) = parseToken(input);
-	if (tk.type != TokenType::End)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): for loop need a ;!\n");
-	}
+	//读取分号
+	input = expectToken(TokenType::End, input, "error(bad syntax): for loop need a ;!");
 
 	//循环步进
 	decltype(parent) increment;
@@ -730,13 +674,8 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createForASTNode(std::string i
 	//添加为parent的第3个儿子
 	parent->childs.push_back(increment);
 
-	//读取一个右括号
-	std::tie(tk, input) = parseToken(input);
-	if (tk.type != TokenType::Rp)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): for loop need a )!\n");
-	}
+	//读取右括号
+	input = expectToken(TokenType::Rp, input, "error(bad syntax): for loop condition need a )!");
 
 	//读取for的循环体
 	decltype(parent) loopblock;
@@ -772,20 +711,12 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createBreakorContinueASTNode(s
 //创建return语句的语法树
 std::tuple<std::shared_ptr<ASTNode>, std::string> createReturnASTNode(std::string input)
 {
-	//解析第一个tk
-	Token tk;
-	std::tie(tk, input) = parseToken(input);
-
-	//如果不是return则报错
-	if (tk.type != TokenType::Return)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): miss keyword return!\n");
-	}
+	//读取关键字return
+	input = expectToken(TokenType::Return, input, "error(bad syntax): miss keyword return!");
 
 	//构建父节点
 	auto parent = std::make_shared<ASTNode>();
-	parent->tk = tk;
+	parent->tk.type = TokenType::Return;
 
 	//解析一个表达式
 	decltype(parent) child;
@@ -847,13 +778,8 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createDefProcASTNode(std::stri
 		}
 	}
 
-	//读取赋值符号
-	std::tie(tk, input) = parseToken(input);
-	//如果类型不是=号则报错
-	if (tk.type != TokenType::Assign)
-	{
-		throw std::runtime_error("error(define proc): need a =!\n");
-	}
+	//读取赋值号
+	input = expectToken(TokenType::Assign, input, "error(define proc): need a =!");
 
 	//构建节点
 	auto parent = std::make_shared<ASTNode>();
@@ -879,17 +805,11 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createDefProcASTNode(std::stri
 //创建语句块的语法树
 std::tuple<std::shared_ptr<ASTNode>, std::string> createBlockASTNode(std::string input)
 {
-	//解析第一个tk
 	Token tk;
-	std::tie(tk, input) = parseToken(input);
 	std::string str;
 
-	//如果不是左大括号则报错
-	if (tk.type != TokenType::LBrace)
-	{
-		//报一个错误
-		throw std::runtime_error("error(bad syntax): miss a {!\n");
-	}
+	//读取左大括号
+	input = expectToken(TokenType::LBrace, input, "error(bad syntax): miss a {!");
 
 	auto parent = std::make_shared<ASTNode>();
 	parent->tk.type = TokenType::Block;
