@@ -4,19 +4,41 @@
 #include <unordered_map>
 #include <stdexcept>
 
-//////////////////////////////////////////////构建二元运算符号的表//////////////////////////////////////////////////////////
-//二元运算符号对应的函数
-double astadd(double a, double b) { return a + b; }
-double astminus(double a, double b) { return a - b; }
-double astmul(double a, double b) { return a * b; }
-double astless(double a, double b) { return a < b; }
-double astgreat(double a, double b) { return a > b; }
-double astnotless(double a, double b) { return a >= b; }
-double astnotgreat(double a, double b) { return a <= b; }
-double astequal(double a, double b) { return a == b; }
-double astnotequal(double a, double b) { return a != b; }
-double astand(double a, double b) { return a && b; }
-double astor(double a, double b) { return a || b; }
+#include <functional>
+
+//翻译一元运算节点的模板
+template<typename OP>
+double translateOp1AST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env, OP op)
+{
+	double result;
+	auto iter = ast->childs.begin();
+	//获得变量名字
+	auto symbol = std::get<std::string>((*iter)->tk.value);
+	if (auto v = getASTEnvSymbol(symbol, env))
+	{
+		if (std::holds_alternative<double>(v.value()))
+		{
+			//计算变量值
+			result = op(std::get<double>(v.value()), executeAST(*(++iter), env));
+			//更新变量在环境中的值
+			setASTEnvSymbol(symbol, result, env);
+		}
+		//变量类型错误
+		else
+		{
+			throw std::runtime_error("error(assignment): the symbol is not variable!\n");
+		}
+	}
+	//如果查不到这个变量则报错
+	else
+	{
+		throw std::runtime_error("error(assignment): undefine symbol!\n");
+	}
+
+	return result;
+}
+
+//需要特殊处理的二元运算符号对应的函数
 double astdiv(double a, double b)
 {
 	//除数不能为0
@@ -26,8 +48,8 @@ double astdiv(double a, double b)
 	}
 	return a / b;
 }
-double astpow(double a, double b) 
-{ 
+double astpow(double a, double b)
+{
 	//当底为0 幂为非正实数时幂操作无效
 	if (a == 0 && b <= 0)
 	{
@@ -49,382 +71,354 @@ double astmod(double a, double b)
 	}
 	return ia % ib;
 }
-//二元运算的映射表
-static std::unordered_map<TokenType, double(*)(double, double)> Op2Table =
+
+//翻译二元运算节点的模板
+template<typename OP, typename PRED>
+double translateOp2AST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env, OP op, PRED pred)
 {
-	{TokenType::Plus, astadd},
-	{TokenType::Minus, astminus},
-	{TokenType::Mul, astmul},
-	{TokenType::Div, astdiv},
-	{TokenType::Pow, astpow},
-	{TokenType::Mod, astmod},
-	{TokenType::Less, astless},
-	{TokenType::Great, astgreat},
-	{TokenType::NotLess, astnotless},
-	{TokenType::NotGreat, astnotgreat},
-	{TokenType::Equal, astequal},
-	{TokenType::NotEqual, astnotequal},
-	{TokenType::And, astand},
-	{TokenType::Or, astor},
-};
-//一元自运算的映射表
-static std::unordered_map<TokenType, double(*)(double, double)> Op1SelfTable =
+	auto iter = ast->childs.begin();
+	if (ast->childs.size() == 2)
+	{
+		double val1 = executeAST(*iter, env);
+		if (pred(val1)) return val1;
+		double val2 = executeAST(*(++iter), env);
+		return op(val1, val2);
+	}
+	else
+	{
+		auto val = executeAST(*iter, env);
+		//结果取负
+		if (ast->tk.type == TokenType::Minus)
+		{
+			val = -val;
+		}
+		return val;
+	}
+}
+
+//翻译自增自运算节点的模板
+template<bool post, typename OP>
+double translateIncrementAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env, OP op)
 {
-	{TokenType::SelfPlus, astadd},
-	{TokenType::SelfMinus, astminus},
-	{TokenType::SelfMul, astmul},
-	{TokenType::SelfDiv, astdiv},
-};
+	double prev, after;
+	//获得符号名字
+	auto symbol = std::get<std::string>((*(ast->childs.begin()))->tk.value);
+	if (auto v = getASTEnvSymbol(symbol, env))
+	{
+		if (std::holds_alternative<double>(v.value()))
+		{
+			//先赋值
+			prev = std::get<double>(v.value());
+			after = op(prev);
+			//再加1更新变量在环境中的值
+			setASTEnvSymbol(symbol, after, env);
+		}
+		//变量类型错误
+		else
+		{
+			throw std::runtime_error("error(++ or --): the symbol is not variable!\n");
+		}
+	}
+	//如果查不到这个变量则报错
+	else
+	{
+		throw std::runtime_error("error(++ or --): undefine symbol!\n");
+	}
+
+	return post ? prev : after;
+}
+
+//翻译赋值符号节点
+double translateAssignAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+{
+	auto iter = ast->childs.begin();
+	//获得变量名字
+	auto symbol = std::get<std::string>((*iter)->tk.value);
+	//如果查不到这个变量则报错
+	if (!getASTEnvSymbol(symbol, env))
+	{
+		throw std::runtime_error("error(assignment): undefine symbol!\n");
+	}
+	iter++;
+	//计算变量定义式值
+	auto result = executeAST(*iter, env);
+	//更新变量在环境中的值
+	setASTEnvSymbol(symbol, result, env);
+
+	return result;
+}
+
+double translateBlockAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+{
+	auto& childs = ast->childs;
+	//构造一个调用函数新的环境
+	ASTEnvironment subenv;
+	//他的父亲时env
+	subenv.parent = env;
+	double result = 0;
+	for (auto iter = childs.begin(); iter != childs.end(); iter++)
+	{
+		//逐行执行代码(在新环境中)
+		result = executeAST(*iter, &subenv);
+	}
+	return result;
+}
+
+//翻译if语句节点
+double translateIfAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+{
+	//构造一个调用函数新的环境
+	ASTEnvironment subenv;
+	//他的父亲时env
+	subenv.parent = env;
+
+	//先计算条件
+	auto iter = ast->childs.begin();
+	double result = 0;
+	double condition = executeAST(*iter, &subenv);
+	if (condition != 0)
+	{
+		//执行if的语句块
+		result = executeAST(*(++iter), &subenv);
+	}
+	else
+	{
+		//执行else的语句块
+		++iter; ++iter;
+		//可能不存再else分支所以要判断一下
+		if (iter != ast->childs.end())
+		{
+			result = executeAST(*iter, &subenv);
+		}
+	}
+	return result;
+}
 
 //continue跳转抛出的异常
 struct ContinueState {};
 //break跳转抛出的异常
 struct BreakState {};
 
-//执行语法树
-double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+//翻译for语句节点
+double translateForAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 {
-	//观察AST根节点的类型
+	//构造一个调用函数新的环境
+	ASTEnvironment subenv;
+	//他的父亲时env
+	subenv.parent = env;
+
+	//获得循环起始
+	auto iter = ast->childs.begin();
+	auto start = *iter;
+	//获得终止条件
+	auto end = *(++iter);
+	//获得步进
+	auto increment = *(++iter);
+	//获得循环体
+	auto body = *(++iter);
+
+	double result = 0;
+	for (executeAST(start, &subenv); executeAST(end, &subenv) != 0; executeAST(increment, &subenv))
+	{
+		try
+		{
+			//执行循环体
+			result = executeAST(body, &subenv);
+		}
+		//continue
+		catch (ContinueState)
+		{
+			continue;
+		}
+		//break
+		catch (BreakState)
+		{
+			break;
+		}
+		//错误代码 继续抛出
+		catch (std::exception& e)
+		{
+			throw e;
+		}
+	}
+
+	return result;
+}
+
+//翻译while语句节点
+double translateWhileAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+{
+	//构造一个调用函数新的环境
+	ASTEnvironment subenv;
+	//他的父亲时env
+	subenv.parent = env;
+
+	//获得循环条件
+	auto iter = ast->childs.begin();
+	auto condition = *iter;
+	//获得循环体
+	auto body = *(++iter);
+	
+	double result = 0;
+	while (executeAST(condition, &subenv) != 0)
+	{
+		try
+		{
+			//执行循环体
+			result = executeAST(body, &subenv);
+		}
+		//continue
+		catch (ContinueState)
+		{
+			continue;
+		}
+		//break
+		catch (BreakState)
+		{
+			break;
+		}
+		//错误代码 继续抛出
+		catch (std::exception& e)
+		{
+			throw e;
+		}
+	}
+
+	return result;
+}
+
+//翻译定义变量节点
+double translateDefVarAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+{
+	//自定义变量
+	auto iter = ast->childs.begin();
+	//获得变量名字
+	auto symbol = std::get<std::string>((*iter)->tk.value);
+	//如果在当前环境中已经定义则报错
+	if (getASTEnvSymbolInCurrent(symbol, env))
+	{
+		throw std::runtime_error("error(Def var): " + symbol + " redefined!\n");
+	}
+	//计算变量定义式值
+	auto result = executeAST(*(++iter), env);
+	//注册变量至环境当中
+	registASTEnvSymbol(symbol, result, env);
+	
+	return result;
+}
+
+//翻译定义函数节点
+double translateDefProcAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+{
+	auto& childs = ast->childs;
+	auto iter = childs.begin();
+	//获得函数本体
+	auto body = *iter;
+	iter++;
+	//获得函数体的名字
+	auto symbol = std::get<std::string>((*iter)->tk.value);
+	//如果在当前环境中已经定义则报错
+	if (getASTEnvSymbolInCurrent(symbol, env))
+	{
+		throw std::runtime_error("error(Def proc): " + symbol + " redefined!\n");
+	}
+	//获得各个参数的名字
+	std::list<std::string> args;
+	iter++;
+	for (; iter != childs.end(); iter++)
+	{
+		args.push_back(std::get<std::string>((*iter)->tk.value));
+	}
+	//注册函数至环境当中
+	registASTEnvSymbol(symbol, std::make_tuple(args, body), env);
+
+	//函数定义返回值设置为0
+	return 0;
+}
+
+//翻译系统自定义符号节点
+double translatePrimitiveSymboAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+{
 	auto tk = ast->tk;
-	auto type = tk.type;
 	auto& childs = ast->childs;
 	double result;
 
-	//用户自定义的符号
-	if (type == TokenType::UserSymbol)
+	auto symbol = std::get<std::string>(tk.value);
+	auto primitive = getPrimitiveSymbol(symbol).value();
+	//函数
+	if (std::holds_alternative<std::function<double(double)>>(primitive))
 	{
-		//获得符号名字
-		auto symbol = std::get<std::string>(tk.value);
-		//如果已经定义了
-		if (auto val = getASTEnvSymbol(symbol, env))
-		{
-			//如果body是值类型则说明为变量
-			if (std::holds_alternative<double>(val.value()))
-			{
-				result = std::get<double>(val.value());
-			}
-			//函数类型
-			else
-			{
-				//解包参数
-				auto[paras, body] = std::get<std::tuple<std::list<std::string>, std::shared_ptr<ASTNode>>>(val.value());
+		//获得函数体
+		auto fun = std::get<std::function<double(double)>>(primitive);
+		//获得函数输入参数 只有单输入参数
+		auto arg = executeAST(*childs.begin(), env);
+		//执行函数
+		result = fun(arg);
+	}
+	//常量
+	else
+	{
+		result = std::get<double>(primitive);
+	}
 
-				//构造一个调用函数新的环境
-				ASTEnvironment subenv;
-				//他的父亲时env
-				subenv.parent = env;
+	return result;
+}
 
-				//如果形参和实参数量不匹配则报错
-				if (paras.size() != childs.size())
-				{
-					//报一个错误
-					throw std::runtime_error("error(bad syntax): mismatch argument counts for function call!\n");
-				}
+//翻译usersymbol节点
+double translateUserSymbolAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+{
+	auto tk = ast->tk;
+	auto& childs = ast->childs;
+	double result;
 
-				//求各个函数输入参数的值
-				auto iterast = childs.begin();
-				for (auto iterpara = paras.begin(); iterpara != paras.end(); iterpara++)
-				{
-					//求第i个实参
-					result = executeAST(*iterast, env);
-					//注册第i个实参至subenv中
-					registASTEnvSymbol(*iterpara, result, &subenv);
-					//ast的迭代器步进1
-					iterast++;
-				}
-				//执行body函数(在subenv下)
-				try
-				{
-					result = executeAST(body, &subenv);
-				}
-				//返回值
-				catch (double d)
-				{
-					result = d;
-				}
-				//错误代码 继续抛出
-				catch (std::exception& e)
-				{
-					throw e;
-				}
-			}
+	//获得符号名字
+	auto symbol = std::get<std::string>(tk.value);
+	//如果已经定义了
+	if (auto val = getASTEnvSymbol(symbol, env))
+	{
+		//如果body是值类型则说明为变量
+		if (std::holds_alternative<double>(val.value()))
+		{
+			result = std::get<double>(val.value());
 		}
+		//函数类型
 		else
 		{
-			//抛出异常
-			throw std::runtime_error("error(bad syntax): undefine symbol!\n");
-		}
-	}
-	//查询根节点是否在二元运算表中
-	else if (Op2Table.find(type) != Op2Table.end())
-	{
-		auto iter = childs.begin();
-		if (childs.size() == 2)
-		{
-			//计算第1个操作数
-			double val1 = executeAST(*iter, env);
-			//如果是&&或者||则需要判断是否进行短路运算
-			if (type == TokenType::And)
-			{
-				if (val1 == 0)
-				{
-					return 0;
-				}
-			}
-			else if (type == TokenType::Or)
-			{
-				if (val1 != 0)
-				{
-					return 1;
-				}
-			}
-			//迭代器步进1
-			iter++;
-			//计算第2个操作数
-			double val2 = executeAST(*iter, env);
-			result = Op2Table[type](val1, val2);
-		}
-		//特殊情况为+ 和 -可能是一元运算
-		else
-		{
-			result = executeAST(*iter, env);
-			//结果取负
-			if (type == TokenType::Minus)
-			{
-				result = -result;
-			}
-		}
-	}
-	//查询根节点是否在一元运算表中
-	else if (Op1SelfTable.find(type) != Op1SelfTable.end())
-	{
-		auto iter = childs.begin();
-		//获得变量名字
-		auto symbol = std::get<std::string>((*iter)->tk.value);
-		if (auto v = getASTEnvSymbol(symbol, env))
-		{
-			if (std::holds_alternative<double>(v.value()))
-			{
-				result = std::get<double>(v.value());
-				//计算变量值
-				iter++;
-				result = Op1SelfTable[type](result, executeAST(*iter, env));
-				//更新变量在环境中的值
-				setASTEnvSymbol(symbol, result, env);
-			}
-			//变量类型错误
-			else
-			{
-				throw std::runtime_error("error(assignment): the symbol is not variable!\n");
-			}
-		}
-		//如果查不到这个变量则报错
-		else
-		{
-			throw std::runtime_error("error(assignment): undefine symbol!\n");
-		}
-	}
-	else if (type == TokenType::Assign)
-	{
-		auto iter = childs.begin();
-		//获得变量名字
-		auto symbol = std::get<std::string>((*iter)->tk.value);
-		//如果查不到这个变量则报错
-		if (!getASTEnvSymbol(symbol, env))
-		{
-			throw std::runtime_error("error(assignment): undefine symbol!\n");
-		}
-		iter++;
-		//计算变量定义式值
-		result = executeAST(*iter, env);
-		//更新变量在环境中的值
-		setASTEnvSymbol(symbol, result, env);
-	}
-	else if (type == TokenType::Increment)
-	{
-		//获得符号名字
-		auto symbol = std::get<std::string>((*childs.begin())->tk.value);
-		if (auto v = getASTEnvSymbol(symbol, env))
-		{
-			if (std::holds_alternative<double>(v.value()))
-			{
-				//先加1再赋值
-				result = std::get<double>(v.value()) + 1;
-				//更新变量在环境中的值
-				setASTEnvSymbol(symbol, result, env);
-			}
-			//变量类型错误
-			else
-			{
-				throw std::runtime_error("error(++): the symbol is not variable!\n");
-			}
-		}
-		//如果查不到这个变量则报错
-		else
-		{
-			throw std::runtime_error("error(++): undefine symbol!\n");
-		}
-	}
-	else if (type == TokenType::PostIncrement)
-	{
-		//获得符号名字
-		auto symbol = std::get<std::string>((*childs.begin())->tk.value);
-		if (auto v = getASTEnvSymbol(symbol, env))
-		{
-			if (std::holds_alternative<double>(v.value()))
-			{
-				//先赋值
-				result = std::get<double>(v.value());
-				//再加1更新变量在环境中的值
-				setASTEnvSymbol(symbol, result + 1, env);
-			}
-			//变量类型错误
-			else
-			{
-				throw std::runtime_error("error(++): the symbol is not variable!\n");
-			}
-		}
-		//如果查不到这个变量则报错
-		else
-		{
-			throw std::runtime_error("error(++): undefine symbol!\n");
-		}
-	}
-	else if (type == TokenType::Decrement)
-	{
-		//获得符号名字
-		auto symbol = std::get<std::string>((*childs.begin())->tk.value);
-		if (auto v = getASTEnvSymbol(symbol, env))
-		{
-			if (std::holds_alternative<double>(v.value()))
-			{
-				//先加1再赋值
-				result = std::get<double>(v.value()) - 1;
-				//更新变量在环境中的值
-				setASTEnvSymbol(symbol, result, env);
-			}
-			//变量类型错误
-			else
-			{
-				throw std::runtime_error("error(--): the symbol is not variable!\n");
-			}
-		}
-		//如果查不到这个变量则报错
-		else
-		{
-			throw std::runtime_error("error(--): undefine symbol!\n");
-		}
-	}
-	else if (type == TokenType::PostDecrement)
-	{
-		//获得符号名字
-		auto symbol = std::get<std::string>((*childs.begin())->tk.value);
-		if (auto v = getASTEnvSymbol(symbol, env))
-		{
-			if (std::holds_alternative<double>(v.value()))
-			{
-				//先赋值
-				result = std::get<double>(v.value());
-				//再减1更新变量在环境中的值
-				setASTEnvSymbol(symbol, result - 1, env);
-			}
-			//变量类型错误
-			else
-			{
-				throw std::runtime_error("error(--): the symbol is not variable!\n");
-			}
-		}
-		//如果查不到这个变量则报错
-		else
-		{
-			throw std::runtime_error("error(--): undefine symbol!\n");
-		}
-	}
-	//数字
-	else if (type == TokenType::Number)
-	{
-		result = std::get<double>(ast->tk.value);
-	}
-	//非
-	else if (type == TokenType::Not)
-	{
-		auto iter = childs.begin();
-		result = !executeAST(*iter, env);
-	}
-	//语句块
-	else if (type == TokenType::Block)
-	{
-		//构造一个调用函数新的环境
-		ASTEnvironment subenv;
-		//他的父亲时env
-		subenv.parent = env;
-		for (auto iter = childs.begin(); iter != childs.end(); iter++)
-		{
-			//逐行执行代码(在新环境中)
-			result = executeAST(*iter, &subenv);
-		}
-	}
-	//条件语句
-	else if (type == TokenType::If)
-	{
-		//构造一个调用函数新的环境
-		ASTEnvironment subenv;
-		//他的父亲时env
-		subenv.parent = env;
+			//解包参数
+			auto[paras, body] = std::get<std::tuple<std::list<std::string>, std::shared_ptr<ASTNode>>>(val.value());
 
-		//先计算条件
-		auto iter = childs.begin();
-		double condition = executeAST(*iter, &subenv);
-		if (condition != 0)
-		{
-			//执行if的语句块
-			iter++;
-			result = executeAST(*iter, &subenv);
-		}
-		else
-		{
-			//执行else的语句块
-			iter++;
-			iter++;
-			//可能不存再else分支所以要判断一下
-			if (iter != childs.end())
+			//构造一个调用函数新的环境
+			ASTEnvironment subenv;
+			//他的父亲时env
+			subenv.parent = env;
+
+			//如果形参和实参数量不匹配则报错
+			if (paras.size() != childs.size())
 			{
-				result = executeAST(*iter, &subenv);
+				//报一个错误
+				throw std::runtime_error("error(bad syntax): mismatch argument counts for function call!\n");
 			}
-		}
-	}
-	//While语句
-	else if (type == TokenType::While)
-	{
-		//构造一个调用函数新的环境
-		ASTEnvironment subenv;
-		//他的父亲时env
-		subenv.parent = env;
 
-		//获得循环条件
-		auto iter = childs.begin();
-		auto condition = *iter;
-		//获得循环体
-		iter++;
-		auto body = *iter;
-		result = 0;
-
-		while (executeAST(condition, &subenv) != 0)
-		{
+			//求各个函数输入参数的值
+			auto iterast = childs.begin();
+			for (auto iterpara = paras.begin(); iterpara != paras.end(); iterpara++)
+			{
+				//求第i个实参
+				result = executeAST(*iterast, env);
+				//注册第i个实参至subenv中
+				registASTEnvSymbol(*iterpara, result, &subenv);
+				//ast的迭代器步进1
+				iterast++;
+			}
+			//执行body函数(在subenv下)
 			try
 			{
-				//执行循环体
 				result = executeAST(body, &subenv);
 			}
-			//continue
-			catch (ContinueState)
+			//返回值
+			catch (double d)
 			{
-				continue;
-			}
-			//break
-			catch (BreakState)
-			{
-				break;
+				result = d;
 			}
 			//错误代码 继续抛出
 			catch (std::exception& e)
@@ -433,146 +427,74 @@ double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
 			}
 		}
 	}
-	//for语句
-	else if (type == TokenType::For)
+	else
 	{
-		//构造一个调用函数新的环境
-		ASTEnvironment subenv;
-		//他的父亲时env
-		subenv.parent = env;
+		//抛出异常
+		throw std::runtime_error("error(bad syntax): undefine symbol!\n");
+	}
 
-		//获得循环起始
-		auto iter = childs.begin();
-		auto start = *iter;
-		//获得终止条件
-		iter++;
-		auto end = *iter;
-		//获得步进
-		iter++;
-		auto increment = *iter;
-		//获得循环体
-		iter++;
-		auto body = *iter;
-		result = 0;
-		for (executeAST(start, &subenv); executeAST(end, &subenv) != 0; executeAST(increment, &subenv))
-		{
-			try
-			{
-				//执行循环体
-				result = executeAST(body, &subenv);
-			}
-			//continue
-			catch (ContinueState)
-			{
-				continue;
-			}
-			//break
-			catch (BreakState)
-			{
-				break;
-			}
-			//错误代码 继续抛出
-			catch (std::exception& e)
-			{
-				throw e;
-			}
-		}
-	}
-	//break语句
-	else if (type == TokenType::Break)
+	return result;
+}
+
+//谓词忽略
+static auto ignorepred = [](double) { return false; };
+//简写
+using PAST = std::shared_ptr<ASTNode>;
+using PENV = ASTEnvironment*;
+//映射表
+static std::unordered_map<TokenType, std::function<double(PAST, PENV)>> ASTTable
+{
+	{ TokenType::Plus, [](PAST ast, PENV env) {return translateOp2AST(ast, env, [](double a, double b) { return a + b; }, ignorepred); } },
+	{ TokenType::Minus, [](PAST ast, PENV env) {return translateOp2AST(ast, env, [](double a, double b) { return a - b; }, ignorepred); } },
+	{ TokenType::Mul, [](PAST ast, PENV env) {return translateOp2AST(ast, env, [](double a, double b) { return a * b; }, ignorepred); } },
+	{ TokenType::Div, [](PAST ast, PENV env) {return translateOp2AST(ast, env, astdiv, ignorepred); } },
+	{ TokenType::Pow, [](PAST ast, PENV env) {return translateOp2AST(ast, env, astpow, ignorepred); } },
+	{ TokenType::Mod, [](PAST ast, PENV env) {return translateOp2AST(ast, env, astmod, ignorepred); } },
+	{ TokenType::Less, [](PAST ast, PENV env) {return translateOp2AST(ast, env, [](double a, double b) { return a < b; }, ignorepred); } },
+	{ TokenType::Great, [](PAST ast, PENV env) {return translateOp2AST(ast, env, [](double a, double b) { return a > b; }, ignorepred); } },
+	{ TokenType::NotLess, [](PAST ast, PENV env) {return translateOp2AST(ast, env, [](double a, double b) { return a >= b; }, ignorepred); } },
+	{ TokenType::NotGreat, [](PAST ast, PENV env) {return translateOp2AST(ast, env, [](double a, double b) { return a <= b; }, ignorepred); } },
+	{ TokenType::Equal, [](PAST ast, PENV env) {return translateOp2AST(ast, env, [](double a, double b) { return a == b; }, ignorepred); } },
+	{ TokenType::NotEqual, [](PAST ast, PENV env) {return translateOp2AST(ast, env, [](double a, double b) { return a != b; }, ignorepred); } },
+	{ TokenType::And, [](PAST ast, PENV env) {return translateOp2AST(ast, env, [](double a, double b) { return a && b; }, [](double v) -> bool { return !v; }); } },
+	{ TokenType::Or, [](PAST ast, PENV env) {return translateOp2AST(ast, env, [](double a, double b) { return a || b; }, [](double v) -> bool { return v; }); } },
+	{ TokenType::SelfPlus, [](PAST ast, PENV env) {return translateOp1AST(ast, env, [](double a, double b) { return a + b; }); } },
+	{ TokenType::SelfMinus, [](PAST ast, PENV env) {return translateOp1AST(ast, env, [](double a, double b) { return a - b; }); } },
+	{ TokenType::SelfMul, [](PAST ast, PENV env) {return translateOp1AST(ast, env, [](double a, double b) { return a * b; }); } },
+	{ TokenType::SelfDiv, [](PAST ast, PENV env) {return translateOp1AST(ast, env, astdiv); } },
+	{ TokenType::Increment, [](PAST ast, PENV env) { return translateIncrementAST<false>(ast, env, [](double a) { return a + 1; }); } },
+	{ TokenType::PostIncrement, [](PAST ast, PENV env) { return translateIncrementAST<true>(ast, env, [](double a) { return a + 1; }); } },
+	{ TokenType::Decrement, [](PAST ast, PENV env) { return translateIncrementAST<false>(ast, env, [](double a) { return a - 1; }); } },
+	{ TokenType::PostDecrement, [](PAST ast, PENV env) { return translateIncrementAST<true>(ast, env, [](double a) { return a - 1; }); } },
+	{ TokenType::Not, [](PAST ast, PENV env) { return !executeAST(*(ast->childs.begin()), env); } },
+	{ TokenType::Assign, translateAssignAST },
+	{ TokenType::Block, translateBlockAST },
+	{ TokenType::If, translateIfAST },
+	{ TokenType::For, translateForAST },
+	{ TokenType::While, translateWhileAST },
+	{ TokenType::DefVar, translateDefVarAST },
+	{ TokenType::DefProc, translateDefProcAST },
+	{ TokenType::Number, [](PAST ast, PENV env) { return std::get<double>(ast->tk.value); } },
+	{ TokenType::PrimitiveSymbol, translatePrimitiveSymboAST },
+	{ TokenType::UserSymbol, translateUserSymbolAST },
+	{ TokenType::Break, [](PAST, PENV) -> double { throw BreakState(); } },
+	{ TokenType::Continue, [](PAST, PENV) -> double { throw ContinueState(); } },
+	{ TokenType::Return, [](PAST ast, PENV env) -> double { throw executeAST(*(ast->childs.begin()), env); } },
+	{ TokenType::End, [](PAST, PENV) { return 0; } },
+};
+
+//执行语法树
+double executeAST(std::shared_ptr<ASTNode> ast, ASTEnvironment* env)
+{
+	double result;
+	//根据驱动表执行执行对应的函数
+	if (auto iter = ASTTable.find(ast->tk.type); iter != ASTTable.end())
 	{
-		throw BreakState();
-	}
-	//break语句
-	else if (type == TokenType::Continue)
-	{
-		throw ContinueState();
-	}
-	//return语句
-	else if (type == TokenType::Return)
-	{
-		//获得循环起始
-		auto iter = childs.begin();
-		//以抛出异常的形式返回
-		throw executeAST(*iter, env);
-	}
-	//无操作
-	else if (type == TokenType::End)
-	{
-	}
-	//自定义变量
-	else if (type == TokenType::DefVar)
-	{
-		auto iter = childs.begin();
-		//获得变量名字
-		auto symbol = std::get<std::string>((*iter)->tk.value);
-		//如果在当前环境中已经定义则报错
-		if (getASTEnvSymbolInCurrent(symbol, env))
-		{
-			throw std::runtime_error("error(Def var): " + symbol + " redefined!\n");
-		}
-		iter++;
-		//计算变量定义式值
-		result = executeAST(*iter, env);
-		//注册变量至环境当中
-		registASTEnvSymbol(symbol, result, env);
-	}
-	//自定义函数
-	else if (type == TokenType::DefProc)
-	{
-		auto iter = childs.begin();
-		//获得函数本体
-		auto body = *iter;
-		iter++;
-		//获得函数体的名字
-		auto symbol = std::get<std::string>((*iter)->tk.value);
-		//如果在当前环境中已经定义则报错
-		if (getASTEnvSymbolInCurrent(symbol, env))
-		{
-			throw std::runtime_error("error(Def proc): " + symbol + " redefined!\n");
-		}
-		//获得各个参数的名字
-		std::list<std::string> args;
-		iter++;
-		for (; iter != childs.end(); iter++)
-		{
-			args.push_back(std::get<std::string>((*iter)->tk.value));
-		}
-		//注册函数至环境当中
-		registASTEnvSymbol(symbol, std::make_tuple(args, body), env);
-		//函数定义返回值设置为0
-		result = 0;
-	}
-	//原生变量及函数
-	else if (type == TokenType::PrimitiveSymbol)
-	{
-		auto symbol = std::get<std::string>(tk.value);
-		auto primitive = getPrimitiveSymbol(symbol).value();
-		//函数
-		if (std::holds_alternative<std::function<double(double)>>(primitive))
-		{
-			//获得函数体
-			auto fun = std::get<std::function<double(double)>>(primitive);
-			//获得函数输入参数 只有单输入参数
-			auto arg = executeAST(*childs.begin(), env);
-			//执行函数
-			result = fun(arg);
-		}
-		//常量
-		else
-		{
-			result = std::get<double>(primitive);
-		}
+		result = iter->second(ast, env);
 	}
 	else
 	{
 		throw std::runtime_error("error(bad syntax):\n");
 	}
-
-	if (abs(result) < 1e-10)
-	{
-		result = 0;
-	}
-
-	return result;
+	return abs(result) < 1e-10 ? 0 : result;
 }

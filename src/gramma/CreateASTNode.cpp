@@ -801,7 +801,7 @@ static std::unordered_map<TokenType, std::tuple<std::shared_ptr<ASTNode>, std::s
 	{ TokenType::End, createNOpASTNode }
 };
 
-//创建以;号结尾的一般语句的语法树
+//创建一般语句的语法树
 std::tuple<std::shared_ptr<ASTNode>, std::string> createStatementASTNode(std::string input)
 {
 	std::shared_ptr<ASTNode> parent;
