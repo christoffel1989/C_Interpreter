@@ -114,6 +114,36 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 		std::tie(child, input) = createFactorASTNode(input);
 		parent->childs.push_back(child);
 	}
+	//& 变量求地址
+	else if (tk.type == TokenType::And)
+	{
+		//读取自定义变量
+		std::tie(tk, input) = expectToken(input, "error(bad syntax): reference(&) must be followed by variable!", TokenType::UserSymbol);
+
+		//创建父节点
+		parent = std::make_shared<ASTNode>();
+		//设置父节点token
+		parent->tk.type = TokenType::Ref;
+		//创建一个子节点存储自加的变量名
+		auto child = std::make_shared<ASTNode>();
+		child->tk = tk;
+		parent->childs.push_back(child);
+	}
+	//* 变量解引用
+	else if (tk.type == TokenType::And)
+	{
+		//读取自定义变量
+		std::tie(tk, input) = expectToken(input, "error(bad syntax): dereference(*) must be followed by variable!", TokenType::UserSymbol);
+
+		//创建父节点
+		parent = std::make_shared<ASTNode>();
+		//设置父节点token
+		parent->tk.type = TokenType::DeRef;
+		//创建一个子节点存储自加的变量名
+		auto child = std::make_shared<ASTNode>();
+		child->tk = tk;
+		parent->childs.push_back(child);
+	}
 	//左括号
 	else if (tk.type == TokenType::Lp)
 	{

@@ -41,8 +41,10 @@ enum class TokenType
 	Or,
 	AndAnd,
 	OrOr,
-	//取地址符号
-	Address,
+	//变量引用(获得指针)
+	Ref,
+	//指针解引用(获得变量)
+	DeRef,
 	//括号
 	Lp,
 	Rp,
