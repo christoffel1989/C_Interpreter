@@ -43,7 +43,8 @@ static std::unordered_map<char, TokenType> TokenTypeTable
 	{';', TokenType::End},
 	{'<', TokenType::Less},
 	{'>', TokenType::Great},
-	{'!', TokenType::Not}
+	{'!', TokenType::Not},
+	{'&', TokenType::Address}
 };
 
 //初始化原始符号表
@@ -124,41 +125,100 @@ bool initPrimitiveTable()
 
 std::tuple<double, std::string> parseNum(std::string input)
 {
-
-	// input "12.34a" numstr ""
-	// ch 1 "2.34a" numstr "1"
-	// ch 2 ".34a" numstr "12"
-	// ch . "34a" numstr "12."
-	char ch;
-	std::string numstr;
-	bool firstDot = true;
-	bool firste = true;
-
-	while (1)
+	double result = 0;
+	//先提取整数部分
+	while (!input.empty())
 	{
-		//是不是空
-		if (input.empty())
+		//获取第一个字符
+		auto iter = input.begin();
+		auto ch = *iter;
+		//如果是数字0至9则整数部分进一位新的到数字放在个位
+		if (ch >= '0' && ch <= '9')
 		{
-			break;
+			result = result * 10 + (ch - '0');
+			//删除第一个字符
+			input.erase(iter);
 		}
-		ch = *input.begin();
-		if ((ch >= '0' && ch <= '9') || (ch == '.' && firstDot))
-		{
-			numstr.push_back(ch);
-			input.erase(input.begin());
-			if (ch == '.')
-			{
-				firstDot = false;
-			}
-		}
-		//遇到了非数字或者是第二次遇到小数点的情况
 		else
 		{
 			break;
 		}
 	}
+	//如果退出循环后第一个元素是小数点则继续提取小数部分
+	if (auto iter = input.begin(); iter != input.end() && *iter == '.')
+	{
+		//删除.
+		input.erase(iter);
+		double divisor = 10;
+		//提取小数部分
+		while (!input.empty())
+		{
+			//获取第一个字符
+			iter = input.begin();
+			auto ch = *iter;
+			//如果是数字0至9则整数部分最后一位再退一位放入
+			if (ch >= '0' && ch <= '9')
+			{
+				result += (ch - '0') / divisor;
+				divisor *= 10;
+				//删除第一个字符
+				input.erase(iter);
+			}
+			else
+			{
+				break;
+			}
+		}
+		//说明小数点后第一个字符不是数字 说明输入有问题
+		if (divisor == 10)
+		{
+			//抛出异常
+			throw std::runtime_error("error(bad syntax): illegal format of input number!\n");
+		}
+	}
+	//如果退出循环后第一个e或者E则继续提取指数的部分
+	if (auto iter = input.begin(); iter != input.end() && isoneof(*iter, 'E', 'e'))
+	{
+		//删除e或E
+		input.erase(iter);
+		//标识指数正负的因子(初始位1)
+		int sign = 1;
+		//如果接下来的字符是+或者-
+		if (iter = input.begin(); iter != input.end() && isoneof(*iter, '+', '-'))
+		{
+			//如果是-号则将标识正负的因子变为-1
+			if (*iter == '-')
+			{
+				sign = -1;
+			}		
+			//删除-
+			input.erase(iter);
+		}
+		//获取剩下的指数部分(整数)
+		int exp = 0;
+		bool hasin = false;
+		while (!input.empty())
+		{
+			//获取第一个字符
+			auto iter = input.begin();
+			auto ch = *iter;
+			//如果是数字0至9则整数部分进一位新的到数字放在个位
+			if (ch >= '0' && ch <= '9')
+			{
+				exp = exp * 10 + (ch - '0');
+				//删除第一个字符
+				input.erase(iter);
+			}
+			else
+			{
+				break;
+			}
+		}
+		//把result加上后面的幂数
+		result = result * pow(10, sign * exp);
+	}
 
-	return { std::stod(numstr), input };
+	return { result, input };
 }
 
 std::tuple<std::string, std::string> parseSymbol(std::string input)
@@ -175,8 +235,8 @@ std::tuple<std::string, std::string> parseSymbol(std::string input)
 			break;
 		}
 		ch = *input.begin();
-		//'Z'和'a'之间还有别的字符
-		if (ch >= 'A' && ch <= 'Z' || ch >= 'a' && ch <= 'z' || ch >= '0' && ch <= '9' || ch == '_')
+		//如果是字母或者数字或者下划线
+		if (isalpha(ch) || ch >= '0' && ch <= '9' || ch == '_')
 		{
 			name.push_back(ch);
 			input.erase(input.begin());
@@ -268,7 +328,7 @@ std::tuple<Token, std::string> parseToken(std::string input)
 		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::Equal;
 		break;
 	case '&':
-		tk.type = (*input.begin() != '&') ? TokenType::BadType : TokenType::And;
+		tk.type = (*input.begin() != '&') ? TokenTypeTable[ch] : TokenType::And;
 		break;
 	case '|':
 		tk.type = (*input.begin() != '|') ? TokenType::BadType : TokenType::Or;
