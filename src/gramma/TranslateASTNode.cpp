@@ -446,9 +446,35 @@ double translateUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 			for (auto iterpara = paras.begin(); iterpara != paras.end(); iterpara++)
 			{
 				//求第i个实参
-				result = executeAST(*iterast, env);
-				//注册第i个实参至subenv中
-				registEnvSymbol(*iterpara, result, &subenv);
+				//如果第i个实参是用户自定义符号
+				if ((*iterast)->tk.type == TokenType::UserSymbol)
+				{
+					if (auto v = getEnvSymbol(std::get<std::string>((*iterast)->tk.value), env))
+					{
+						//如果是数值变量
+						if (std::holds_alternative<double>(v.value()))
+						{
+							//获得实参数值
+							result = std::get<double>(v.value());
+							//注册第i个实参至subenv中
+							registEnvSymbol(*iterpara, result, &subenv);
+						}
+						//如果是函数变量
+						else
+						{
+							//将这个函数注册到调用的环境中
+							registEnvSymbol(*iterpara, std::get<std::tuple<std::list<std::string>, std::shared_ptr<ASTNode>>>(v.value()), &subenv);
+						}
+					}
+				}
+				//其他情况
+				else
+				{
+					//求解值
+					result = executeAST(*iterast, env);
+					//注册第i个实参至subenv中
+					registEnvSymbol(*iterpara, result, &subenv);
+				}
 				//ast的迭代器步进1
 				iterast++;
 			}
