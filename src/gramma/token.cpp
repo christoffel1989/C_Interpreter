@@ -33,10 +33,6 @@ static std::unordered_map<char, TokenType> TokenTypeTable
 	{'-', TokenType::Minus},
 	{'*', TokenType::Mul},
 	{'/', TokenType::Div},
-	{'+=', TokenType::SelfPlus},
-	{'-=', TokenType::SelfMinus},
-	{'*=', TokenType::SelfMul},
-	{'/=', TokenType::SelfDiv},
 	{'^', TokenType::Pow},
 	{'%', TokenType::Mod},
 	{'(', TokenType::Lp},
@@ -136,6 +132,7 @@ std::tuple<double, std::string> parseNum(std::string input)
 	char ch;
 	std::string numstr;
 	bool firstDot = true;
+	bool firste = true;
 
 	while (1)
 	{
