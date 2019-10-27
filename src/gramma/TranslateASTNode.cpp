@@ -337,7 +337,7 @@ double translateDefVarAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	//获得变量名字
 	auto symbol = std::get<std::string>((*iter)->tk.value);
 	//如果在当前环境中已经定义则也报错
-	if (getEnvSymbolInCurrent(symbol, env))
+	if (getEnvSymbol(symbol, env, true))
 	{
 		throw std::runtime_error("error(Def var): " + symbol + " redefined!\n");
 	}
@@ -360,7 +360,7 @@ double translateDefProcAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	//获得函数体的名字
 	auto symbol = std::get<std::string>((*iter)->tk.value);
 	//如果在当前环境中已经定义则也报错
-	if (getEnvSymbolInCurrent(symbol, env))
+	if (getEnvSymbol(symbol, env, true))
 	{
 		throw std::runtime_error("error(Def proc): " + symbol + " redefined!\n");
 	}
