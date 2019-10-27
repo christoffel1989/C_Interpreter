@@ -210,7 +210,7 @@ std::tuple<Token, std::string> parseToken(std::string input)
 		}
 		ch = *input.begin();
 		input.erase(input.begin());
-	} while (ch == ' ');
+	} while (ch == ' ' || ch == '\n');
 
 	switch (ch)
 	{
