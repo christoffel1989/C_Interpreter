@@ -463,7 +463,7 @@ double translateUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 						else
 						{
 							//将这个函数注册到调用的环境中
-							registEnvSymbol(*iterpara, std::get<std::tuple<std::list<std::string>, std::shared_ptr<ASTNode>>>(v.value()), &subenv);
+							registEnvSymbol(*iterpara, v.value(), &subenv);
 						}
 					}
 				}
