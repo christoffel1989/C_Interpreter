@@ -39,6 +39,8 @@ enum class TokenType
 	Not,
 	And,
 	Or,
+	AndAnd,
+	OrOr,
 	//取地址符号
 	Address,
 	//括号

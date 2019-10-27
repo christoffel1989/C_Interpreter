@@ -341,7 +341,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createLogicASTNode(std::string
 		//获取符号
 		auto[op, str] = parseToken(input);
 		//加号或者减号
-		if (isoneof(op.type, TokenType::And, TokenType::Or))
+		if (isoneof(op.type, TokenType::AndAnd, TokenType::OrOr))
 		{
 			//把父节点搬移到子节点1的位置
 			child1 = parent;
@@ -349,8 +349,8 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createLogicASTNode(std::string
 			std::tie(child2, input) = createRelationASTNode(str);
 			//创建父节点
 			parent = std::make_shared<ASTNode>();
-			//设置父节点token
-			parent->tk = op;
+			//设置父节点token (parse和translate的时候And、Or的含义不同 AndAnd变成与(And) And变成取地址(Address))
+			parent->tk.type = (op.type == TokenType::AndAnd) ? TokenType::And : TokenType::Or;
 			//子节点1和2与父节点相连
 			parent->childs.push_back(child1);
 			parent->childs.push_back(child2);

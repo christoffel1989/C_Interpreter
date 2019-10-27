@@ -8,55 +8,11 @@
 
 //原始映射表
 static std::unordered_map<std::string, std::variant<double, std::function<double(double)>>> PrimitiveTable;
-
-//关键字表
-static std::unordered_map<std::string, TokenType> KeywordTable = 
-{
-	{"var", TokenType::DefVar},
-	{"proc", TokenType::DefProc},
-	{"if", TokenType::If},
-	{"elseif", TokenType::ElseIf},
-	{"else", TokenType::Else},
-	{"for", TokenType::For},
-	{"while", TokenType::While},
-	{"do", TokenType::Do},
-	{"break", TokenType::Break},
-	{"continue", TokenType::Continue},
-	{"return", TokenType::Return}
-};
-
-//token映射表
-static std::unordered_map<char, TokenType> TokenTypeTable
-{
-	{'=', TokenType::Assign},
-	{'+', TokenType::Plus},
-	{'-', TokenType::Minus},
-	{'*', TokenType::Mul},
-	{'/', TokenType::Div},
-	{'^', TokenType::Pow},
-	{'%', TokenType::Mod},
-	{'(', TokenType::Lp},
-	{')', TokenType::Rp},
-	{'{', TokenType::LBrace},
-	{'}', TokenType::RBrace},
-	{',', TokenType::Comma},
-	{';', TokenType::End},
-	{'<', TokenType::Less},
-	{'>', TokenType::Great},
-	{'!', TokenType::Not},
-	{'&', TokenType::Address}
-};
-
 //初始化原始符号表
 bool initPrimitiveTable();
 void registPrimitiveSymbol(std::string symbol, std::variant<double, std::function<double(double)>> value);
-//从字符串中解析出第一个数值
-std::tuple<double, std::string> parseNum(std::string input);
-//从字符串中解析出第一个英文单词
-std::tuple<std::string, std::string> parseSymbol(std::string input);
-
+//利用静态变量的性质在程序启动时立刻初始化原始符号表
 static bool init = initPrimitiveTable();
-
 bool initPrimitiveTable()
 {
 	//////////////////初始化默认0元函数(即变量)////////////////////////
@@ -122,6 +78,67 @@ bool initPrimitiveTable()
 
 	return true;
 }
+
+//单字符运算符的哈希表
+static std::unordered_map<char, TokenType> Tk1Table
+{
+	{'=', TokenType::Assign},
+	{'+', TokenType::Plus},
+	{'-', TokenType::Minus},
+	{'*', TokenType::Mul},
+	{'/', TokenType::Div},
+	{'^', TokenType::Pow},
+	{'%', TokenType::Mod},
+	{'(', TokenType::Lp},
+	{')', TokenType::Rp},
+	{'{', TokenType::LBrace},
+	{'}', TokenType::RBrace},
+	{',', TokenType::Comma},
+	{';', TokenType::End},
+	{'<', TokenType::Less},
+	{'>', TokenType::Great},
+	{'!', TokenType::Not},
+	{'&', TokenType::And},
+	{'&', TokenType::Or},
+};
+
+//双字符运算符的哈希表
+static std::unordered_map<std::string, TokenType> TK2Table = 
+{
+	{"==", TokenType::Equal},
+	{"!=", TokenType::NotEqual},
+	{"<=", TokenType::NotGreat},
+	{">=", TokenType::NotLess},
+	{"+=", TokenType::SelfPlus},
+	{"-=", TokenType::SelfMinus},
+	{"*=", TokenType::SelfMul},
+	{"/=", TokenType::SelfDiv},
+	{"++", TokenType::PlusPlus},
+	{"--", TokenType::MinusMinus},
+	{"&&", TokenType::AndAnd},
+	{"||", TokenType::OrOr}
+};
+
+//关键字表
+static std::unordered_map<std::string, TokenType> KeywordTable =
+{
+	{"var", TokenType::DefVar},
+	{"proc", TokenType::DefProc},
+	{"if", TokenType::If},
+	{"elseif", TokenType::ElseIf},
+	{"else", TokenType::Else},
+	{"for", TokenType::For},
+	{"while", TokenType::While},
+	{"do", TokenType::Do},
+	{"break", TokenType::Break},
+	{"continue", TokenType::Continue},
+	{"return", TokenType::Return}
+};
+
+//从字符串中解析出第一个数值
+std::tuple<double, std::string> parseNum(std::string input);
+//从字符串中解析出第一个英文单词
+std::tuple<std::string, std::string> parseSymbol(std::string input);
 
 std::tuple<double, std::string> parseNum(std::string input)
 {
@@ -224,22 +241,15 @@ std::tuple<double, std::string> parseNum(std::string input)
 std::tuple<std::string, std::string> parseSymbol(std::string input)
 {
 	//根据调用关系 能确保这个程序的输入一定是字母或者下划线
-	char ch;
-	std::string name;
-
-	while (1)
+	auto iter = input.begin();
+	while (iter != input.end())
 	{
-		//是不是空
-		if (input.empty())
-		{
-			break;
-		}
-		ch = *input.begin();
+		auto ch = *iter;
 		//如果是字母或者数字或者下划线
 		if (isalpha(ch) || ch >= '0' && ch <= '9' || ch == '_')
 		{
-			name.push_back(ch);
-			input.erase(input.begin());
+			//迭代器步进1
+			++iter;
 		}
 		//遇到了非数字或者是第二次遇到小数点的情况
 		else
@@ -248,6 +258,11 @@ std::tuple<std::string, std::string> parseSymbol(std::string input)
 		}
 	}
 
+	//分割字符
+	auto name = input.substr(0, iter - input.begin());
+	//去掉前面的部分
+	input.erase(input.begin(), iter);
+
 	return { name, input };
 }
 
@@ -255,139 +270,100 @@ std::tuple<Token, std::string> parseToken(std::string input)
 {
 	char ch;
 	Token tk;
-
-	//把空格去掉
-	do
+	auto iter = input.begin();
+	//去掉字符串开头的空格和换行符号
+	while (iter != input.end())
 	{
-		//先判断一下是否是空
-		if (input.empty())
+		ch = *iter;
+		if (ch == ' ' || ch == '\n')
 		{
-			tk.type = TokenType::Empty;
-			return { tk, "" };
+			//迭代器往前
+			++iter;
 		}
-		ch = *input.begin();
+		else
+		{
+			break;
+		}
+	}
+	//如果迭代器已经走到末尾了则说明是空字符串 直接返回
+	if (iter == input.end())
+	{
+		tk.type = TokenType::Empty;
+		return { tk, "" };
+	}
+
+	//裁剪input区间在[begin, iter)范围内的字符(不是空格就是换行)
+	input.erase(input.begin(), iter);
+
+	//如果当前字符ch是下面这些可能由两个字符构成的运算的第一个字符
+	if (isoneof(ch, '=', '+', '-', '*', '/', '&', '|', '!', '<', '>'))
+	{
+		bool exist = false;
+		//如果当前至少还有两个字符
+		if (input.size() > 1)
+		{
+			//构造一个字符串包含input的前两个字符
+			auto str = input.substr(0, 2);
+			//如果str在二元表中
+			if (auto it = TK2Table.find(str); exist = it != TK2Table.end())
+			{
+				//解析出来的token的类型为该表中str映射的类型
+				tk.type = it->second;
+				//裁剪掉前两个字符
+				input.erase(input.begin(), input.begin() + 2);
+			}
+		}
+		//如果上述查找失败了 则说明在当前输入字串中只是单独的一个ch 所以只需在一元表中查询即可
+		if (!exist)
+		{
+			//根据一元二元表的构造结构 一定能查到所以不需要用find
+			tk.type = Tk1Table[ch];
+			//裁剪第一个字符
+			input.erase(input.begin());
+		}
+	}
+	//因为到了这里时ch不一定在一元表中 所以需要用find查找
+	else if (auto it = Tk1Table.find(ch); it != Tk1Table.end())
+	{
+		//解析出来的token的类型为该表中ch映射的类型
+		tk.type = it->second;
+		//裁剪第一个字符
 		input.erase(input.begin());
-	} while (ch == ' ' || ch == '\n');
-
-	switch (ch)
+	}
+	//如果是数字
+	else if (ch >= '0' && ch <= '9')
 	{
-	case '^':
-	case '%':
-	case '(':
-	case ')':
-	case '{':
-	case '}':
-	case ',':
-	case ';':
-		tk.type = TokenTypeTable[ch];
-		break;
-	case '+':
-		if (*input.begin() == '=')
-		{
-			tk.type = TokenType::SelfPlus;
-		}
-		else if (*input.begin() == '+')
-		{
-			tk.type = TokenType::PlusPlus;
-		}
-		else
-		{
-			tk.type = TokenType::Plus;
-		}
-		break;
-	case '-':
-		if (*input.begin() == '=')
-		{
-			tk.type = TokenType::SelfMinus;
-		}
-		else if (*input.begin() == '-')
-		{
-			tk.type = TokenType::MinusMinus;
-		}
-		else
-		{
-			tk.type = TokenType::Minus;
-		}
-		break;
-	case '*':
-		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::SelfMul;
-		break;
-	case '/':
-		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::SelfDiv;
-		break;
-	case '!':
-		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::NotEqual;
-		break;
-	case '<':
-		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::NotGreat;
-		break;
-	case '>':
-		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::NotLess;
-		break;
-	case '=':
-		tk.type = (*input.begin() != '=') ? TokenTypeTable[ch] : TokenType::Equal;
-		break;
-	case '&':
-		tk.type = (*input.begin() != '&') ? TokenTypeTable[ch] : TokenType::And;
-		break;
-	case '|':
-		tk.type = (*input.begin() != '|') ? TokenType::BadType : TokenType::Or;
-		break;
-	case '0':
-	case '1':
-	case '2':
-	case '3':
-	case '4':
-	case '5':
-	case '6':
-	case '7':
-	case '8':
-	case '9':
-		//刚才吃掉的数字补回去
-		input.insert(input.begin(), ch);
+		//执行解析字符串开头数字的函数
 		std::tie(tk.value, input) = parseNum(input);
 		tk.type = TokenType::Number;
-		break;
-	default:
-		//字母或者下划线的情况
-		if (isalpha(ch) || ch == '_')
+	}
+	//字母或者下划线的情况
+	else if (isalpha(ch) || ch == '_')
+	{
+		//解析出名字
+		std::tie(tk.value, input) = parseSymbol(input);
+		auto symbol = std::get<std::string>(tk.value);
+		//如果是系统内部定义的关键字
+		if (auto iter = KeywordTable.find(symbol); iter != KeywordTable.end())
 		{
-			//刚才吃掉的字母补回去
-			input.insert(input.begin(), ch);
-			//解析出名字
-			std::tie(tk.value, input) = parseSymbol(input);
-			auto symbol = std::get<std::string>(tk.value);
-			//如果是系统内部定义的关键字
-			if (auto iter = KeywordTable.find(symbol); iter != KeywordTable.end())
-			{
-				tk.type = iter->second;
-			}
-			//内部提前定义好的符号
-			else if (auto v = getPrimitiveSymbol(symbol))
-			{
-				tk.type = TokenType::PrimitiveSymbol;
-			}
-			//用户自定义符号
-			else
-			{
-				tk.type = TokenType::UserSymbol;
-			}
+			tk.type = iter->second;
 		}
+		//内部提前定义好的符号
+		else if (auto v = getPrimitiveSymbol(symbol))
+		{
+			tk.type = TokenType::PrimitiveSymbol;
+		}
+		//用户自定义符号
 		else
 		{
-			tk.type = TokenType::BadType;
+			tk.type = TokenType::UserSymbol;
 		}
-		break;
 	}
-
-	//这些情况多吃了一个等号需要删掉
-	if (isoneof(tk.type, TokenType::NotLess, TokenType::NotGreat, TokenType::Equal, TokenType::NotEqual, TokenType::And, 
-						 TokenType::Or, TokenType::SelfPlus, TokenType::SelfMinus, TokenType::SelfMul, TokenType::SelfDiv, 
-						 TokenType::MinusMinus, TokenType::PlusPlus))
+	else
 	{
-		input.erase(input.begin());
+		//坏类型
+		tk.type = TokenType::BadType;
 	}
-
 	return { tk, input };
 }
 
