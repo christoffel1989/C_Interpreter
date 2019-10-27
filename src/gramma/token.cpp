@@ -126,18 +126,17 @@ bool initPrimitiveTable()
 std::tuple<double, std::string> parseNum(std::string input)
 {
 	double result = 0;
+	auto iter = input.begin();
 	//先提取整数部分
-	while (!input.empty())
+	while (iter != input.end())
 	{
-		//获取第一个字符
-		auto iter = input.begin();
 		auto ch = *iter;
 		//如果是数字0至9则整数部分进一位新的到数字放在个位
 		if (ch >= '0' && ch <= '9')
 		{
 			result = result * 10 + (ch - '0');
-			//删除第一个字符
-			input.erase(iter);
+			//迭代器前进一位
+			++iter;
 		}
 		else
 		{
@@ -145,24 +144,23 @@ std::tuple<double, std::string> parseNum(std::string input)
 		}
 	}
 	//如果退出循环后第一个元素是小数点则继续提取小数部分
-	if (auto iter = input.begin(); iter != input.end() && *iter == '.')
+	if (iter != input.end() && *iter == '.')
 	{
-		//删除.
-		input.erase(iter);
+		//迭代器前进一位(去掉小数点)
+		++iter;
 		double divisor = 10;
 		//提取小数部分
-		while (!input.empty())
+		while (iter != input.end())
 		{
 			//获取第一个字符
-			iter = input.begin();
 			auto ch = *iter;
 			//如果是数字0至9则整数部分最后一位再退一位放入
 			if (ch >= '0' && ch <= '9')
 			{
 				result += (ch - '0') / divisor;
 				divisor *= 10;
-				//删除第一个字符
-				input.erase(iter);
+				//迭代器前进一位
+				++iter;
 			}
 			else
 			{
@@ -177,37 +175,36 @@ std::tuple<double, std::string> parseNum(std::string input)
 		}
 	}
 	//如果退出循环后第一个e或者E则继续提取指数的部分
-	if (auto iter = input.begin(); iter != input.end() && isoneof(*iter, 'E', 'e'))
+	if (iter != input.end() && isoneof(*iter, 'E', 'e'))
 	{
-		//删除e或E
-		input.erase(iter);
+		//迭代器前进一位(去掉e或E)
+		++iter;
 		//标识指数正负的因子(初始位1)
 		int sign = 1;
 		//如果接下来的字符是+或者-
-		if (iter = input.begin(); iter != input.end() && isoneof(*iter, '+', '-'))
+		if (iter != input.end() && isoneof(*iter, '+', '-'))
 		{
 			//如果是-号则将标识正负的因子变为-1
 			if (*iter == '-')
 			{
 				sign = -1;
-			}		
-			//删除-
-			input.erase(iter);
+			}
+			//迭代器前进一位(删除+或-)
+			++iter;
 		}
 		//获取剩下的指数部分(整数)
 		int exp = 0;
 		bool hasin = false;
-		while (!input.empty())
+		while (iter != input.end())
 		{
 			//获取第一个字符
-			auto iter = input.begin();
 			auto ch = *iter;
 			//如果是数字0至9则整数部分进一位新的到数字放在个位
 			if (ch >= '0' && ch <= '9')
 			{
 				exp = exp * 10 + (ch - '0');
-				//删除第一个字符
-				input.erase(iter);
+				//迭代器前进一位
+				++iter;
 			}
 			else
 			{
@@ -217,6 +214,9 @@ std::tuple<double, std::string> parseNum(std::string input)
 		//把result加上后面的幂数
 		result = result * pow(10, sign * exp);
 	}
+
+	//切掉input的[begin,iter)的字符
+	input.erase(input.begin(), iter);
 
 	return { result, input };
 }
@@ -380,7 +380,7 @@ std::tuple<Token, std::string> parseToken(std::string input)
 		break;
 	}
 
-	//这三种情况多吃了一个等号需要删掉
+	//这些情况多吃了一个等号需要删掉
 	if (isoneof(tk.type, TokenType::NotLess, TokenType::NotGreat, TokenType::Equal, TokenType::NotEqual, TokenType::And, 
 						 TokenType::Or, TokenType::SelfPlus, TokenType::SelfMinus, TokenType::SelfMul, TokenType::SelfDiv, 
 						 TokenType::MinusMinus, TokenType::PlusPlus))
