@@ -1,13 +1,36 @@
 ﻿#include "ASTNode.h"
 
+//解释器栈空间(变量和函数共享)
+static std::vector<UserAST> StackMemory(MaxStackLen);
+
+//栈顶起始为0
+static VarAddress StackTop = 0;
+
+//获得栈空间栈顶地址
+VarAddress getStackTop()
+{
+	return StackTop;
+}
+
+//设置栈空间栈顶地址
+void setStackTop(VarAddress top)
+{
+	//栈空间最大容量之内才能设置
+	if (top < MaxStackLen)
+	{
+		StackTop = top;
+	}
+}
+
 //注册新的变量或函数在当前环境
 void registEnvSymbol(std::string symbol, UserAST value, Environment* env)
 {
 	//只在当前环境中设置
-	env->address[symbol] = env->top;
-	env->memory[env->top] = value;
-	//栈顶指针后移一位
-	env->top++;
+	auto top = getStackTop();
+	env->address[symbol] = top;
+	StackMemory[top] = value;
+	//栈顶向上移动1
+	setStackTop(top + 1);
 }
 
 //设置用户自定义符号(变量或函数)的值
@@ -18,7 +41,7 @@ void setEnvSymbol(std::string symbol, UserAST value, Environment* env)
 	//如果存在
 	if (iter != env->address.end())
 	{
-		env->memory[env->address[symbol]] = value;
+		StackMemory[env->address[symbol]] = value;
 	}
 	//到父亲中设置
 	else if (env->parent)
@@ -27,40 +50,73 @@ void setEnvSymbol(std::string symbol, UserAST value, Environment* env)
 	}
 }
 
+//通过地址设置直接设置用户自定义符号(变量或函数)的值
+void setEnvSymbol(UserAST value, VarAddress addr)
+{
+	//如果在当前栈顶范围之内
+	if (addr <= getStackTop())
+	{
+		//将地址addr处的值更新为value
+		StackMemory[addr] = addr;
+	}
+}
+
 //获得特定名字的函数的实体
 std::optional<UserAST> getEnvSymbol(std::string symbol, Environment* env, bool onlycurrent)
 {
-	//只在当前环境找 不寻找父环境
-	if (onlycurrent)
+	//查找
+	auto iter = env->address.find(symbol);
+	//如果存在
+	if (iter != env->address.end())
 	{
-		auto iter = env->address.find(symbol);
-		if (iter != env->address.end())
-		{
-			return { iter->second };
-		}
-		else
-		{
-			return {};
-		}
+		return StackMemory[iter->second];
+	}
+	//如果允许往更上一级找并且存在父环境 则继续查询父环境
+	else if (!onlycurrent && env->parent)
+	{
+		return getEnvSymbol(symbol, env->parent);
 	}
 	else
 	{
-		//查找
-		auto iter = env->address.find(symbol);
-		//如果存在
-		if (iter != env->address.end())
-		{
-			return { env->memory[iter->second] };
-		}
-		//如果存在父环境 则继续查询父环境
-		else if (env->parent)
-		{
-			return getEnvSymbol(symbol, env->parent);
-		}
-		else
-		{
-			//不存在时返回无效值
-			return {};
-		}
+		//不存在时返回无效值
+		return {};
+	}
+}
+
+//通过地直接获得用户自定义符号(变量或函数)的值
+std::optional<UserAST> getEnvSymbol(VarAddress addr)
+{
+	//如果在当前栈顶范围之内
+	if (addr <= getStackTop())
+	{
+		//返回地址addr处的值
+		return { StackMemory[addr] };
+	}
+	//栈顶范围之外返回无效值
+	else
+	{
+		return {};
+	}
+}
+
+//获得制定环境中用户自定义符号的地址
+std::optional<VarAddress> getEnvSymbolAddr(std::string symbol, Environment* env)
+{
+	//查找
+	auto iter = env->address.find(symbol);
+	//如果存在
+	if (iter != env->address.end())
+	{
+		return { iter->second };
+	}
+	//如果存在父环境 则继续查询父环境
+	else if (!env->parent)
+	{
+		return getEnvSymbolAddr(symbol, env->parent);
+	}
+	else
+	{
+		//不存在时返回无效值
+		return {};
 	}
 }
