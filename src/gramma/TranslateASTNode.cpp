@@ -271,6 +271,7 @@ double translateAssignAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	}
 }
 
+//翻译由中括号包起来的语句块
 double translateBlockAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	auto& childs = ast->childs;
