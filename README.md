@@ -1,4 +1,4 @@
-# C_Intepretor
+# C_Interpreter
 a c-like code interpreter (console version) coded by c++17
 
 variable, nonrecursive function, functional definition
