@@ -112,6 +112,24 @@ double translateDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode>
 				rval = executeAST(astR, env);
 			}
 
+			/*//std::variant的visit模式来处理不同值类型的情况(还未成功)
+			auto fun = [=](auto& arg) 
+			{
+				using T = std::decay_t<decltype(arg)>;
+				//计算结果如果是double或者VarAddress类型
+				if constexpr (std::is_same_v<T, double> || std::is_same_v<T, VarAddress>)
+				{
+					return auxDeRefAST<LVal, Self, T>(rval, arg, iaddr, op);
+				}
+				//计算结果是函数
+				else
+				{
+					//抛出异常
+					throw std::runtime_error("error(Deref pointer): function can not be deref!\n");
+				}
+			};
+			std::visit(fun, v);*/
+
 			//如果计算结果是double
 			if (std::holds_alternative<double>(v.value()))
 			{
@@ -120,7 +138,7 @@ double translateDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode>
 			//如果计算结果是VarAddress
 			else if (std::holds_alternative<VarAddress>(v.value()))
 			{
-				return auxDeRefAST<LVal, Self, double>(rval, v.value(), iaddr, op);
+				return auxDeRefAST<LVal, Self, VarAddress>(rval, v.value(), iaddr, op);
 			}
 			//如果计算结果是函数
 			else
