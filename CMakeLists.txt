@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 2.8.11)
 
 #project name
-PROJECT(C_INTEPRETOR)
+PROJECT(C_INTERPRETER)
 
 #static compile
 set(CMAKE_CXX_FLAGS_DEBUG "/D_DEBUG /MTd /Zi /Od")
