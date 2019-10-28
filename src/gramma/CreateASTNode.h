@@ -5,6 +5,9 @@
 //创建空语句
 std::tuple<std::shared_ptr<ASTNode>, std::string> createNOpASTNode(std::string input);
 
+//创建解引用表达式
+std::tuple<std::shared_ptr<ASTNode>, std::string> createDeRefASTNode(std::string input);
+
 //创建因子的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::string input);
 

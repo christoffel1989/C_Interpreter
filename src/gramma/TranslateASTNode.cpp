@@ -128,24 +128,149 @@ double translateIncrementAST(std::shared_ptr<ASTNode> ast, Environment* env, OP 
 	return post ? prev : after;
 }
 
+//翻译取地址
+double translateRefAST(std::shared_ptr<ASTNode> ast, Environment* env)
+{
+	//获得变量符号名字
+	auto symbol = std::get<std::string>((*ast->childs.begin())->tk.value);
+	//如果查询变量的地址值
+	if (auto val = getEnvSymbolAddr(symbol, env))
+	{
+		//转换成double返回
+		return (double)val.value();
+	}
+	//如果没查询到
+	else
+	{
+		throw std::runtime_error("error(ref): undefine symbol " + symbol + " !\n");
+	}
+}
+
+//指针解引用(作为左值)
+double translateLDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode> astR, Environment* env)
+{
+	auto iter = astL->childs.begin();
+	//计算表达式的值
+	auto daddr = executeAST(*iter, env);
+	//查看是否是非负整数
+	auto iaddr = (int)daddr;
+	//如果result是非负整数
+	if (iaddr >= 0 && iaddr == daddr)
+	{
+		//求解右侧表达式
+		auto rval = executeAST(astR, env);
+		//求解右侧表达式并将求解结果赋值给地址为iddr处的内存
+		setEnvSymbol(rval, VarAddress(iaddr));
+		return rval;
+	}
+	else
+	{
+		//抛出异常
+		throw std::runtime_error("error(Def pointer): address should be non negetive integral value\n");
+	}
+}
+
+//指针解引用(作为右值)
+double translateRDeRefAST(std::shared_ptr<ASTNode> ast, Environment* env)
+{
+	auto iter = ast->childs.begin();
+	//计算表达式的值
+	auto daddr = executeAST(*iter, env);
+	//查看是否是非负整数
+	auto iaddr = (int)daddr;
+	//如果result是非负整数
+	if (iaddr >= 0 && iaddr == daddr)
+	{
+		//利用地址获得变量值
+		if (auto v = getEnvSymbol(VarAddress(iaddr)))
+		{
+			//变量的值为double
+			if (std::holds_alternative<double>(v.value()))
+			{
+				return std::get<double>(v.value());
+			}
+			//指针的值为VarAddress
+			else if (std::holds_alternative<VarAddress>(v.value()))
+			{
+				return std::get<VarAddress>(v.value());
+			}
+			else
+			{
+				//变量不能解引用
+				throw std::runtime_error("error(deref(*)): proc can not be dereffed!\n");
+			}
+		}
+		else
+		{
+			//地址超出了栈顶
+			throw std::runtime_error("error(deref(*)): out of stack top address!\n");
+		}
+	}
+	else
+	{
+		//抛出异常
+		throw std::runtime_error("error(Def pointer): address should be non negetive integral value\n");
+	}
+}
+
 //翻译赋值符号节点
 double translateAssignAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	auto iter = ast->childs.begin();
-	//获得变量名字
-	auto symbol = std::get<std::string>((*iter)->tk.value);
-	//如果查不到这个变量则报错
-	if (!getEnvSymbol(symbol, env))
+	//如果是引用类型
+	if ((*iter)->tk.type == TokenType::DeRef)
 	{
-		throw std::runtime_error("error(assignment): undefine symbol!\n");
+		//执行左值解引用赋值操作
+		auto astL = *iter;
+		auto astR = *(++iter);
+		return translateLDeRefAST(astL, astR, env);
 	}
-	iter++;
-	//计算变量定义式值
-	auto result = executeAST(*iter, env);
-	//更新变量在环境中的值
-	setEnvSymbol(symbol, result, env);
+	else
+	{
+		//获得变量名字
+		auto symbol = std::get<std::string>((*iter)->tk.value);
+		//查询这个变量
+		if (auto v = getEnvSymbol(symbol, env))
+		{
+			//计算表达式结果
+			auto result = executeAST(*(++iter), env);
+			//如果是变量
+			if (std::holds_alternative<double>(v.value()))
+			{
+				//更新变量在环境中的值
+				setEnvSymbol(symbol, result, env);
+			}
+			//其他情况下是指针
+			else if (std::holds_alternative<VarAddress>(v.value()))
+			{
+				auto addr = (int)result;
+				//如果result是非负整数
+				if (addr >= 0 && addr == result)
+				{
+					//更新指针在环境中的存储的地址值
+					setEnvSymbol(symbol, VarAddress(addr), env);
+				}
+				else
+				{
+					//抛出异常
+					throw std::runtime_error("error(assignment): address should be non negetive integral value!\n");
+				}
+			}
+			//变量 理论上不应该到达这个位置
+			else 
+			{
+				//抛出异常
+				throw std::runtime_error("error(assignment):can not assign a function!\n");
+			}
 
-	return result;
+			return result;
+		}
+		else
+		{
+			//查不到这个变量报错
+			throw std::runtime_error("error(assignment): undefine symbol!\n");
+		}
+	}
 }
 
 double translateBlockAST(std::shared_ptr<ASTNode> ast, Environment* env)
@@ -349,6 +474,36 @@ double translateDefVarAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	return result;
 }
 
+//翻译定义指针变量的节点
+double translateDefPointerAST(std::shared_ptr<ASTNode> ast, Environment* env)
+{
+	//自定义变量
+	auto iter = ast->childs.begin();
+	//获得变量名字
+	auto symbol = std::get<std::string>((*iter)->tk.value);
+	//如果在当前环境中已经定义则也报错
+	if (getEnvSymbol(symbol, env, true))
+	{
+		throw std::runtime_error("error(Def pointer): " + symbol + " redefined!\n");
+	}
+	//计算变量定义式值
+	auto daddr = executeAST(*(++iter), env);
+	auto iaddr = (int)daddr;
+	//如果result是非负整数
+	if (iaddr >= 0 && iaddr == daddr)
+	{
+		//注册变量至环境当中
+		registEnvSymbol(symbol, VarAddress(iaddr), env);
+	}
+	else
+	{
+		//抛出异常
+		throw std::runtime_error("error(Def pointer): address should be non negetive integral value!\n");
+	}
+
+	return daddr;
+}
+
 //翻译定义函数节点
 double translateDefProcAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
@@ -418,10 +573,15 @@ double translateUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	//如果已经定义了
 	if (auto val = getEnvSymbol(symbol, env))
 	{
-		//如果body是值类型则说明为变量
+		//double类型则说明是值类型变量
 		if (std::holds_alternative<double>(val.value()))
 		{
 			result = std::get<double>(val.value());
+		}
+		//VarAddress类型则说明是指针类型变量
+		else if (std::holds_alternative<VarAddress>(val.value()))
+		{
+			result = std::get<VarAddress>(val.value());
 		}
 		//函数类型
 		else
@@ -451,20 +611,8 @@ double translateUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 				{
 					if (auto v = getEnvSymbol(std::get<std::string>((*iterast)->tk.value), env))
 					{
-						//如果是数值变量
-						if (std::holds_alternative<double>(v.value()))
-						{
-							//获得实参数值
-							result = std::get<double>(v.value());
-							//注册第i个实参至subenv中
-							registEnvSymbol(*iterpara, result, &subenv);
-						}
-						//如果是函数变量
-						else
-						{
-							//将这个函数注册到调用的环境中
-							registEnvSymbol(*iterpara, v.value(), &subenv);
-						}
+						//注册第i个实参(可能是变量指针或者函数)至subenv中
+						registEnvSymbol(*iterpara, v.value(), &subenv);
 					}
 				}
 				//其他情况
@@ -535,6 +683,8 @@ static std::unordered_map<TokenType, std::function<double(PAST, PENV)>> ASTTable
 	{ TokenType::Decrement, [](PAST ast, PENV env) { return translateIncrementAST<false>(ast, env, [](double a) { return a - 1; }); } },
 	{ TokenType::PostDecrement, [](PAST ast, PENV env) { return translateIncrementAST<true>(ast, env, [](double a) { return a - 1; }); } },
 	{ TokenType::Not, [](PAST ast, PENV env) { return !executeAST(*(ast->childs.begin()), env); } },
+	{ TokenType::Ref, translateRefAST },
+	{ TokenType::DeRef, translateRDeRefAST },
 	{ TokenType::Assign, translateAssignAST },
 	{ TokenType::Block, translateBlockAST },
 	{ TokenType::If, translateIfAST },
@@ -542,6 +692,7 @@ static std::unordered_map<TokenType, std::function<double(PAST, PENV)>> ASTTable
 	{ TokenType::Do, translateDoWhileAST },
 	{ TokenType::For, translateForAST },
 	{ TokenType::DefVar, translateDefVarAST },
+	{ TokenType::DefPointer, translateDefPointerAST },
 	{ TokenType::DefProc, translateDefProcAST },
 	{ TokenType::Number, [](PAST ast, PENV env) { return std::get<double>(ast->tk.value); } },
 	{ TokenType::PrimitiveSymbol, translatePrimitiveSymboAST },

@@ -31,6 +31,45 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createNOpASTNode(std::string i
 	return { parent, input };
 }
 
+//创建解引用表达式
+std::tuple<std::shared_ptr<ASTNode>, std::string> createDeRefASTNode(std::string input)
+{
+	Token tk;
+
+	//读取解引用符号(*)
+	std::tie(tk, input) = expectToken(input, "error(bad syntax): miss a *!", TokenType::Mul);
+
+	//读取自定义变量或者左括号
+	std::tie(tk, input) = expectToken(input, "error(bad syntax): dereference(*) must be followed by variable or a (arithmetic expression)!", TokenType::UserSymbol, TokenType::Lp);
+
+	//创建父节点
+	auto parent = std::make_shared<ASTNode>();
+	//设置父节点token
+	parent->tk.type = TokenType::DeRef;
+	//定义子节点变量
+	decltype(parent) child;
+
+	//如果读取出来的是自定义变量
+	if (tk.type == TokenType::UserSymbol)
+	{
+		//子节点存储自加的变量名
+		child = std::make_shared<ASTNode>();
+		child->tk = tk;
+	}
+	//读出来是括号
+	else
+	{
+		//解析一个算数表达式
+		std::tie(child, input) = createArithmeticASTNode(input);
+		//再解析一个右括号
+		std::tie(tk, input) = expectToken(input, "error(bad syntax): miss a )!", TokenType::Rp);
+	}
+
+	parent->childs.push_back(child);
+
+	return { parent, input };
+}
+
 //创建因子的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::string input)
 {
@@ -114,7 +153,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 		std::tie(child, input) = createFactorASTNode(input);
 		parent->childs.push_back(child);
 	}
-	//& 变量求地址
+	//&变量求地址
 	else if (tk.type == TokenType::And)
 	{
 		//读取自定义变量
@@ -129,20 +168,11 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 		child->tk = tk;
 		parent->childs.push_back(child);
 	}
-	//* 变量解引用
-	else if (tk.type == TokenType::And)
+	//*变量解引用
+	else if (tk.type == TokenType::Mul)
 	{
-		//读取自定义变量
-		std::tie(tk, input) = expectToken(input, "error(bad syntax): dereference(*) must be followed by variable!", TokenType::UserSymbol);
-
-		//创建父节点
-		parent = std::make_shared<ASTNode>();
-		//设置父节点token
-		parent->tk.type = TokenType::DeRef;
-		//创建一个子节点存储自加的变量名
-		auto child = std::make_shared<ASTNode>();
-		child->tk = tk;
-		parent->childs.push_back(child);
+		//把*号补回去再解析
+		std::tie(parent, input) = createDeRefASTNode("*" + input);
 	}
 	//左括号
 	else if (tk.type == TokenType::Lp)
@@ -399,7 +429,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createLogicASTNode(std::string
 //创建表达式的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::string input)
 {
-	//获得前两个token
+	//获得第一个token
 	Token tk;
 	std::string str;
 	std::tie(tk, str) = parseToken(input);
@@ -409,31 +439,57 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 	//如果是变量定义符号
 	if (tk.type == TokenType::DefVar)
 	{
-		//读取定义的变量名
-		Token tkname;
-		std::tie(tkname, input) = expectToken(str, "error(Def var): need a symbol to reprensent variable name!", TokenType::UserSymbol);
+		//读取定义的变量名或者是*  当为*时代表定义的是指针类型变量
+		std::tie(tk, input) = expectToken(str, "error(Def var or pointer): need ( or a symbol to reprensent variable name !", TokenType::UserSymbol, TokenType::Mul);
 
-		//读取赋值符号
-		std::tie(std::ignore, input) = expectToken(input, "error(Def var): miss = for defining varible!", TokenType::Assign);
+		//定义非指针类型变量
+		if (tk.type == TokenType::UserSymbol)
+		{
+			//读取赋值符号
+			std::tie(std::ignore, input) = expectToken(input, "error(Def var): miss = for defining varible!", TokenType::Assign);
 
-		//创建赋值父节点
-		parent = std::make_shared<ASTNode>();
-		//结点类型为赋值
-		parent->tk.type = TokenType::DefVar;
-		//创建代表被赋值变量的子节点
-		auto child = std::make_shared<ASTNode>();
-		child->tk = tkname;
-		//child与parent连接
-		parent->childs.push_back(child);
-		//创建代表赋值=号右边表达式的语句
-		std::tie(child, input) = createExpressionASTNode(input);
-		//child与parent连接
-		parent->childs.push_back(child);
+			//创建赋值父节点
+			parent = std::make_shared<ASTNode>();
+			//结点类型为赋值
+			parent->tk.type = TokenType::DefVar;
+			//创建代表被赋值变量的子节点
+			auto child = std::make_shared<ASTNode>();
+			child->tk = tk;
+			//child与parent连接
+			parent->childs.push_back(child);
+			//创建代表赋值=号右边表达式的语句
+			std::tie(child, input) = createExpressionASTNode(input);
+			//child与parent连接
+			parent->childs.push_back(child);
+		}
+		//定义指针类型变量
+		else if (tk.type == TokenType::Mul)
+		{
+			//读取定义的变量名
+			std::tie(tk, input) = expectToken(input, "error(Def pointer): need a symbol to reprensent pointer name!", TokenType::UserSymbol);
+
+			//读取赋值符号
+			std::tie(std::ignore, input) = expectToken(input, "error(Def var): miss = for defining varible!", TokenType::Assign);
+
+			//创建赋值父节点
+			parent = std::make_shared<ASTNode>();
+			//结点类型为赋值
+			parent->tk.type = TokenType::DefPointer;
+			//创建代表被赋值变量的子节点
+			auto child = std::make_shared<ASTNode>();
+			child->tk = tk;
+			//child与parent连接
+			parent->childs.push_back(child);
+			//创建代表赋值=号右边算表达式语句
+			std::tie(child, input) = createArithmeticASTNode(input);
+			//child与parent连接
+			parent->childs.push_back(child);
+		}
 	}
 	//如果是用户自定义的符号 
 	else if (tk.type == TokenType::UserSymbol)
 	{
-		//则继续再度一个字符
+		//则继续再读一个字符
 		Token tktemp;
 		std::tie(tktemp, str) = parseToken(str);
 		//如果是=、+=、-=、*=、/=
@@ -446,6 +502,34 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 			//创建代表被赋值变量的子节点
 			auto child = std::make_shared<ASTNode>();
 			child->tk = tk;
+			//child与parent连接
+			parent->childs.push_back(child);
+			//创建代表赋值=号右边表达式的语句
+			std::tie(child, input) = createExpressionASTNode(str);
+			//child与parent连接
+			parent->childs.push_back(child);
+		}
+		else
+		{
+			//其他情况下用逻辑运算语句解析
+			std::tie(parent, input) = createLogicASTNode(input);
+		}
+	}
+	//如果是Mul(即指针解引用)
+	else if (tk.type == TokenType::Mul)
+	{
+		//解析出解引用节点
+		auto[child, str] = createDeRefASTNode("*" + input);
+		//则继续再读一个字符
+		Token tktemp;
+		std::tie(tktemp, str) = parseToken(str);
+		//如果是=、+=、-=、*=、/=
+		if (isoneof(tktemp.type, TokenType::Assign, TokenType::SelfPlus, TokenType::SelfMinus, TokenType::SelfMul, TokenType::SelfDiv))
+		{
+			//创建赋值父节点
+			parent = std::make_shared<ASTNode>();
+			//结点类型为赋值
+			parent->tk.type = tktemp.type;
 			//child与parent连接
 			parent->childs.push_back(child);
 			//创建代表赋值=号右边表达式的语句

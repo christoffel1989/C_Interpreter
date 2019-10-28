@@ -63,6 +63,8 @@ enum class TokenType
 	DefVar,
 	//定义函数
 	DefProc,
+	//定义指针
+	DefPointer,
 	//赋值
 	Assign,
 	//条件分支
