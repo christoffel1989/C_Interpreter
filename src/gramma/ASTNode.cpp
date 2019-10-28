@@ -1,5 +1,7 @@
 ﻿#include "ASTNode.h"
 
+#include <vector>
+
 //解释器栈空间(变量和函数共享)
 static std::vector<UserAST> StackMemory(MaxStackLen);
 
