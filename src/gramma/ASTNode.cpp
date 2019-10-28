@@ -51,14 +51,16 @@ void setEnvSymbol(std::string symbol, UserAST value, Environment* env)
 }
 
 //通过地址设置直接设置用户自定义符号(变量或函数)的值
-void setEnvSymbol(UserAST value, VarAddress addr)
+bool setEnvSymbol(UserAST value, VarAddress addr)
 {
 	//如果在当前栈顶范围之内
 	if (addr <= getStackTop())
 	{
 		//将地址addr处的值更新为value
 		StackMemory[addr] = value;
+		return true;
 	}
+	return false;
 }
 
 //获得特定名字的函数的实体

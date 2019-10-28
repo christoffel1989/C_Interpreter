@@ -6,39 +6,7 @@
 
 #include <functional>
 
-//翻译一元运算节点的模板
-template<typename OP>
-double translateOp1AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op)
-{
-	double result;
-	auto iter = ast->childs.begin();
-	//获得变量名字
-	auto symbol = std::get<std::string>((*iter)->tk.value);
-	if (auto v = getEnvSymbol(symbol, env))
-	{
-		if (std::holds_alternative<double>(v.value()))
-		{
-			//计算变量值
-			result = op(std::get<double>(v.value()), executeAST(*(++iter), env));
-			//更新变量在环境中的值
-			setEnvSymbol(symbol, result, env);
-		}
-		//变量类型错误
-		else
-		{
-			throw std::runtime_error("error(assignment): the symbol is not variable!\n");
-		}
-	}
-	//如果查不到这个变量则报错
-	else
-	{
-		throw std::runtime_error("error(assignment): undefine symbol!\n");
-	}
-
-	return result;
-}
-
-//需要特殊处理的二元运算符号对应的函数
+//存在异常可能性的二元运算符号操作的函数
 double astdiv(double a, double b)
 {
 	//除数不能为0
@@ -72,62 +40,6 @@ double astmod(double a, double b)
 	return ia % ib;
 }
 
-//翻译二元运算节点的模板
-template<typename OP, typename PRED>
-double translateOp2AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op, PRED pred)
-{
-	auto iter = ast->childs.begin();
-	if (ast->childs.size() == 2)
-	{
-		double val1 = executeAST(*iter, env);
-		if (pred(val1)) return val1;
-		double val2 = executeAST(*(++iter), env);
-		return op(val1, val2);
-	}
-	else
-	{
-		auto val = executeAST(*iter, env);
-		//结果取负
-		if (ast->tk.type == TokenType::Minus)
-		{
-			val = -val;
-		}
-		return val;
-	}
-}
-
-//翻译自增自运算节点的模板
-template<bool post, typename OP>
-double translateIncrementAST(std::shared_ptr<ASTNode> ast, Environment* env, OP op)
-{
-	double prev, after;
-	//获得符号名字
-	auto symbol = std::get<std::string>((*(ast->childs.begin()))->tk.value);
-	if (auto v = getEnvSymbol(symbol, env))
-	{
-		if (std::holds_alternative<double>(v.value()))
-		{
-			//先赋值
-			prev = std::get<double>(v.value());
-			after = op(prev);
-			//再加1更新变量在环境中的值
-			setEnvSymbol(symbol, after, env);
-		}
-		//变量类型错误
-		else
-		{
-			throw std::runtime_error("error(++ or --): the symbol is not variable!\n");
-		}
-	}
-	//如果查不到这个变量则报错
-	else
-	{
-		throw std::runtime_error("error(++ or --): undefine symbol!\n");
-	}
-
-	return post ? prev : after;
-}
-
 //翻译取地址
 double translateRefAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
@@ -159,14 +71,100 @@ double translateLDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode
 	{
 		//求解右侧表达式
 		auto rval = executeAST(astR, env);
-		//求解右侧表达式并将求解结果赋值给地址为iddr处的内存
-		setEnvSymbol(rval, VarAddress(iaddr));
-		return rval;
+
+		//获取左侧地址的对应的变量值
+		if (auto v = getEnvSymbol(VarAddress(iaddr)))
+		{
+			if (std::holds_alternative<double>(v.value()))
+			{
+				//求解右侧表达式并将求解结果赋值给地址为iddr处的内存
+				setEnvSymbol(rval, VarAddress(iaddr));
+			}
+			else if (std::holds_alternative<VarAddress>(v.value()))
+			{
+				//如果不是非负整数则报错
+				if (rval < 0 || rval != (int)rval)
+				{
+					//抛出异常
+					throw std::runtime_error("error(Deref pointer): address should be non negetive integral value!\n");
+				}
+				//求解右侧表达式并将求解结果赋值给地址为iddr处的内存
+				setEnvSymbol(VarAddress(rval), VarAddress(iaddr));
+			}
+			else
+			{
+				//抛出异常
+				throw std::runtime_error("error(Deref pointer): function can not be deref!\n");
+			}
+			return rval;
+		}
+		else
+		{
+			//抛出异常
+			throw std::runtime_error("error(Deref pointer): address out of stack top\n");
+		}
 	}
 	else
 	{
 		//抛出异常
-		throw std::runtime_error("error(Def pointer): address should be non negetive integral value\n");
+		throw std::runtime_error("error(Def pointer): address should be non negetive integral value!\n");
+	}
+}
+
+//指针解引用(左值)自运算
+template <typename OP>
+double translateLDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode> astR, Environment* env, OP op)
+{
+	auto iter = astL->childs.begin();
+	//计算表达式的值
+	auto daddr = executeAST(*iter, env);
+	//查看是否是非负整数
+	auto iaddr = (int)daddr;
+	//如果result是非负整数
+	if (iaddr >= 0 && iaddr == daddr)
+	{
+		//获取左侧地址的对应的变量值
+		if (auto v = getEnvSymbol(VarAddress(iaddr)))
+		{
+			//求解右侧表达式
+			auto rval = executeAST(astR, env);
+			if (std::holds_alternative<double>(v.value()))
+			{
+				//计算结果值
+				rval = op(std::get<double>(v.value()), rval);
+				//更新改地址处的变量值
+				setEnvSymbol(rval, VarAddress(iaddr));
+			}
+			else if (std::holds_alternative<VarAddress>(v.value()))
+			{
+				//计算结果值
+				rval = op(std::get<VarAddress>(v.value()), rval);
+				//如果不是非负整数则报错
+				if (rval < 0 || rval != (int)rval)
+				{
+					//抛出异常
+					throw std::runtime_error("error(Deref pointer): address should be non negetive integral value!\n");
+				}
+				//求解右侧表达式并将求解结果赋值给地址为iddr处的内存
+				setEnvSymbol(VarAddress(rval), VarAddress(iaddr));
+			}
+			else
+			{
+				//抛出异常
+				throw std::runtime_error("error(Deref pointer): function can not be deref!\n");
+			}
+			return rval;
+		}
+		else
+		{
+			//抛出异常
+			throw std::runtime_error("error(Deref pointer): address out of stack top\n");
+		}
+	}
+	else
+	{
+		//抛出异常
+		throw std::runtime_error("error(Deref pointer): address should be non negetive integral value\n");
 	}
 }
 
@@ -606,16 +604,25 @@ double translateUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 			for (auto iterpara = paras.begin(); iterpara != paras.end(); iterpara++)
 			{
 				//求第i个实参
+				auto node = *iterast;
 				//如果第i个实参是用户自定义符号
-				if ((*iterast)->tk.type == TokenType::UserSymbol)
+				if (node->tk.type == TokenType::UserSymbol)
 				{
-					if (auto v = getEnvSymbol(std::get<std::string>((*iterast)->tk.value), env))
+					if (auto v = getEnvSymbol(std::get<std::string>(node->tk.value), env))
 					{
 						//注册第i个实参(可能是变量指针或者函数)至subenv中
 						registEnvSymbol(*iterpara, v.value(), &subenv);
 					}
 				}
-				//其他情况
+				//如果是引用(获取地址)
+				else if (node->tk.type == TokenType::Ref)
+				{
+					//求解值
+					result = executeAST(*iterast, env);
+					//注册第i个实参至subenv中
+					registEnvSymbol(*iterpara, VarAddress(result), &subenv);
+				}
+				//普通表达式
 				else
 				{
 					//求解值
@@ -650,6 +657,106 @@ double translateUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	}
 
 	return result;
+}
+
+//翻译一元运算节点的模板
+template<typename OP>
+double translateOp1AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op)
+{
+	double result;
+	auto iter = ast->childs.begin();
+	//引用自加
+	if ((*iter)->tk.type == TokenType::DeRef)
+	{
+		//执行左值解引用赋值操作
+		auto astL = *iter;
+		auto astR = *(++iter);
+		//执行自运算的左值解引用版本函数
+		return translateLDeRefAST(astL, astR, env, op);
+	}
+	else
+	{
+		//获得变量名字
+		auto symbol = std::get<std::string>((*iter)->tk.value);
+		if (auto v = getEnvSymbol(symbol, env))
+		{
+			if (std::holds_alternative<double>(v.value()))
+			{
+				//计算变量值
+				result = op(std::get<double>(v.value()), executeAST(*(++iter), env));
+				//更新变量在环境中的值
+				setEnvSymbol(symbol, result, env);
+			}
+			//变量类型错误
+			else
+			{
+				throw std::runtime_error("error(assignment): the symbol is not variable!\n");
+			}
+		}
+		//如果查不到这个变量则报错
+		else
+		{
+			throw std::runtime_error("error(assignment): undefine symbol!\n");
+		}
+	}
+
+	return result;
+}
+
+//翻译二元运算节点的模板
+template<typename OP, typename PRED>
+double translateOp2AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op, PRED pred)
+{
+	auto iter = ast->childs.begin();
+	if (ast->childs.size() == 2)
+	{
+		double val1 = executeAST(*iter, env);
+		if (pred(val1)) return val1;
+		double val2 = executeAST(*(++iter), env);
+		return op(val1, val2);
+	}
+	else
+	{
+		auto val = executeAST(*iter, env);
+		//结果取负
+		if (ast->tk.type == TokenType::Minus)
+		{
+			val = -val;
+		}
+		return val;
+	}
+}
+
+//翻译自增自运算节点的模板
+template<bool post, typename OP>
+double translateIncrementAST(std::shared_ptr<ASTNode> ast, Environment* env, OP op)
+{
+	double prev, after;
+	//获得符号名字
+	auto symbol = std::get<std::string>((*(ast->childs.begin()))->tk.value);
+	if (auto v = getEnvSymbol(symbol, env))
+	{
+		if (std::holds_alternative<double>(v.value()))
+		{
+			//先赋值
+			prev = std::get<double>(v.value());
+			after = op(prev);
+			//再加1更新变量在环境中的值
+			setEnvSymbol(symbol, after, env);
+		}
+		//变量类型错误
+		else
+		{
+			throw std::runtime_error("error(++ or --): the symbol is not variable!\n");
+		}
+	}
+	//如果查不到这个变量则报错
+	else
+	{
+		throw std::runtime_error("error(++ or --): undefine symbol!\n");
+	}
+
+	return post ? prev : after;
 }
 
 //谓词忽略

@@ -63,7 +63,7 @@ void registEnvSymbol(std::string symbol, UserAST value, Environment* env);
 void setEnvSymbol(std::string symbol, UserAST value, Environment* env);
 
 //通过地址设置直接设置用户自定义符号(变量或函数)的值
-void setEnvSymbol(UserAST value, VarAddress addr);
+bool setEnvSymbol(UserAST value, VarAddress addr);
 
 //获得用户自定义符号(变量或函数)的值 当onlycurrent为true时只在当前环境搜索
 std::optional<UserAST> getEnvSymbol(std::string symbol, Environment* env, bool onlycurrent = false);
