@@ -57,7 +57,7 @@ void setEnvSymbol(UserAST value, VarAddress addr)
 	if (addr <= getStackTop())
 	{
 		//将地址addr处的值更新为value
-		StackMemory[addr] = addr;
+		StackMemory[addr] = value;
 	}
 }
 

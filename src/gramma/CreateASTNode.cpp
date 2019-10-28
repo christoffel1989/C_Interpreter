@@ -519,7 +519,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 	else if (tk.type == TokenType::Mul)
 	{
 		//解析出解引用节点
-		auto[child, str] = createDeRefASTNode("*" + input);
+		auto[child, str] = createDeRefASTNode(input);
 		//则继续再读一个字符
 		Token tktemp;
 		std::tie(tktemp, str) = parseToken(str);
