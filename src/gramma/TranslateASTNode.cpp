@@ -58,62 +58,41 @@ double translateRefAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	}
 }
 
-//指针解引用(作为左值)
-double translateLDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode> astR, Environment* env)
+//解引用辅助模板
+//模板参数LVal表征解引用是当为左值还是右值 true时为左值 fasle时为右值(此时astR赋值nullptr)
+//模板参数Self表征是否不是单纯的赋值而是存在额外自运算 true(且LVal为true)时为自运算需要设置一个二元运算算子op false(且LVal为fasle)时为普通赋值 op随便扔一个lambda进去即可利用constexpr的特性不会编译
+template <bool LVal, bool Self, typename T, typename OP>
+double auxDeRefAST(double rval, UserAST astval, int iaddr, OP op)
 {
-	auto iter = astL->childs.begin();
-	//计算表达式的值
-	auto daddr = executeAST(*iter, env);
-	//查看是否是非负整数
-	auto iaddr = (int)daddr;
-	//如果result是非负整数
-	if (iaddr >= 0 && iaddr == daddr)
+	//如果是右值则先把rval赋值为左侧解引用得到的数值
+	if constexpr (!LVal)
 	{
-		//求解右侧表达式
-		auto rval = executeAST(astR, env);
+		rval = std::get<T>(astval);
+	}
 
-		//获取左侧地址的对应的变量值
-		if (auto v = getEnvSymbol(VarAddress(iaddr)))
-		{
-			if (std::holds_alternative<double>(v.value()))
-			{
-				//求解右侧表达式并将求解结果赋值给地址为iddr处的内存
-				setEnvSymbol(rval, VarAddress(iaddr));
-			}
-			else if (std::holds_alternative<VarAddress>(v.value()))
-			{
-				//如果不是非负整数则报错
-				if (rval < 0 || rval != (int)rval)
-				{
-					//抛出异常
-					throw std::runtime_error("error(Deref pointer): address should be non negetive integral value!\n");
-				}
-				//求解右侧表达式并将求解结果赋值给地址为iddr处的内存
-				setEnvSymbol(VarAddress(rval), VarAddress(iaddr));
-			}
-			else
-			{
-				//抛出异常
-				throw std::runtime_error("error(Deref pointer): function can not be deref!\n");
-			}
-			return rval;
-		}
-		else
-		{
-			//抛出异常
-			throw std::runtime_error("error(Deref pointer): address out of stack top\n");
-		}
-	}
-	else
+	//如果是自运算则rval多一次运算
+	if constexpr (Self)
 	{
-		//抛出异常
-		throw std::runtime_error("error(Def pointer): address should be non negetive integral value!\n");
+		//进入到此处时LVal不能是false
+		static_assert(LVal, "self operation need deref be a L-value operation!\n");
+		//计算结果值
+		rval = op(rval, std::get<T>(astval));
 	}
+
+	//如果是左值则将求解结果(数值)赋值给地址为iddr处的内存
+	if constexpr (LVal)
+	{
+		setEnvSymbol(T(rval), VarAddress(iaddr));
+	}
+
+	return rval;
 }
 
-//指针解引用(左值)自运算
-template <typename OP>
-double translateLDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode> astR, Environment* env, OP op)
+//指针解引用运算(模板)
+//模板参数LVal表征解引用是当为左值还是右值 true时为左值 fasle时为右值(此时astR赋值nullptr)
+//模板参数Self表征是否不是单纯的赋值而是存在额外自运算 true(且LVal为true)时为自运算需要设置一个二元运算算子op false(且LVal为fasle)时为普通赋值 op随便扔一个lambda进去即可利用constexpr的特性不会编译
+template <bool LVal, bool Self, typename OP>
+double translateDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode> astR, Environment* env, OP op)
 {
 	auto iter = astL->childs.begin();
 	//计算表达式的值
@@ -126,34 +105,29 @@ double translateLDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode
 		//获取左侧地址的对应的变量值
 		if (auto v = getEnvSymbol(VarAddress(iaddr)))
 		{
-			//求解右侧表达式
-			auto rval = executeAST(astR, env);
+			double rval = 0;
+			//如果是左值则rval赋值为右侧表达式的计算结果
+			if constexpr (LVal)
+			{
+				rval = executeAST(astR, env);
+			}
+
+			//如果计算结果是double
 			if (std::holds_alternative<double>(v.value()))
 			{
-				//计算结果值
-				rval = op(std::get<double>(v.value()), rval);
-				//更新改地址处的变量值
-				setEnvSymbol(rval, VarAddress(iaddr));
+				return auxDeRefAST<LVal, Self, double>(rval, v.value(), iaddr, op);
 			}
+			//如果计算结果是VarAddress
 			else if (std::holds_alternative<VarAddress>(v.value()))
 			{
-				//计算结果值
-				rval = op(std::get<VarAddress>(v.value()), rval);
-				//如果不是非负整数则报错
-				if (rval < 0 || rval != (int)rval)
-				{
-					//抛出异常
-					throw std::runtime_error("error(Deref pointer): address should be non negetive integral value!\n");
-				}
-				//求解右侧表达式并将求解结果赋值给地址为iddr处的内存
-				setEnvSymbol(VarAddress(rval), VarAddress(iaddr));
+				return auxDeRefAST<LVal, Self, double>(rval, v.value(), iaddr, op);
 			}
+			//如果计算结果是函数
 			else
 			{
 				//抛出异常
 				throw std::runtime_error("error(Deref pointer): function can not be deref!\n");
 			}
-			return rval;
 		}
 		else
 		{
@@ -168,49 +142,6 @@ double translateLDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode
 	}
 }
 
-//指针解引用(作为右值)
-double translateRDeRefAST(std::shared_ptr<ASTNode> ast, Environment* env)
-{
-	auto iter = ast->childs.begin();
-	//计算表达式的值
-	auto daddr = executeAST(*iter, env);
-	//查看是否是非负整数
-	auto iaddr = (int)daddr;
-	//如果result是非负整数
-	if (iaddr >= 0 && iaddr == daddr)
-	{
-		//利用地址获得变量值
-		if (auto v = getEnvSymbol(VarAddress(iaddr)))
-		{
-			//变量的值为double
-			if (std::holds_alternative<double>(v.value()))
-			{
-				return std::get<double>(v.value());
-			}
-			//指针的值为VarAddress
-			else if (std::holds_alternative<VarAddress>(v.value()))
-			{
-				return std::get<VarAddress>(v.value());
-			}
-			else
-			{
-				//变量不能解引用
-				throw std::runtime_error("error(deref(*)): proc can not be dereffed!\n");
-			}
-		}
-		else
-		{
-			//地址超出了栈顶
-			throw std::runtime_error("error(deref(*)): out of stack top address!\n");
-		}
-	}
-	else
-	{
-		//抛出异常
-		throw std::runtime_error("error(Def pointer): address should be non negetive integral value\n");
-	}
-}
-
 //翻译赋值符号节点
 double translateAssignAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
@@ -221,7 +152,7 @@ double translateAssignAST(std::shared_ptr<ASTNode> ast, Environment* env)
 		//执行左值解引用赋值操作
 		auto astL = *iter;
 		auto astR = *(++iter);
-		return translateLDeRefAST(astL, astR, env);
+		return translateDeRefAST<true, false>(astL, astR, env, []() {});
 	}
 	else
 	{
@@ -672,8 +603,8 @@ double translateOp1AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op)
 		//执行左值解引用赋值操作
 		auto astL = *iter;
 		auto astR = *(++iter);
-		//执行自运算的左值解引用版本函数
-		return translateLDeRefAST(astL, astR, env, op);
+		//执行解引用(自运算的左值)
+		return translateDeRefAST<true, true>(astL, astR, env, op);
 	}
 	else
 	{
@@ -792,7 +723,7 @@ static std::unordered_map<TokenType, std::function<double(PAST, PENV)>> ASTTable
 	{ TokenType::PostDecrement, [](PAST ast, PENV env) { return translateIncrementAST<true>(ast, env, [](double a) { return a - 1; }); } },
 	{ TokenType::Not, [](PAST ast, PENV env) { return !executeAST(*(ast->childs.begin()), env); } },
 	{ TokenType::Ref, translateRefAST },
-	{ TokenType::DeRef, translateRDeRefAST },
+	{ TokenType::DeRef,[](PAST ast, PENV env) { return translateDeRefAST<false, false>(ast, nullptr, env, []() {}); } },
 	{ TokenType::Assign, translateAssignAST },
 	{ TokenType::Block, translateBlockAST },
 	{ TokenType::If, translateIfAST },

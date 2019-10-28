@@ -5,12 +5,6 @@
 //翻译取地址
 double translateRefAST(std::shared_ptr<ASTNode> ast, Environment* env);
 
-//指针解引用(作为左值)
-double translateLDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode> astR, Environment* env);
-
-//指针解引用(作为右值)
-double translateRDeRefAST(std::shared_ptr<ASTNode> ast, Environment* env);
-
 //翻译赋值符号节点
 double translateAssignAST(std::shared_ptr<ASTNode> ast, Environment* env);
 
