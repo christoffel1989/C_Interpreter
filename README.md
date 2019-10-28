@@ -3,18 +3,23 @@ a c-like code intepretor (console version)
 
 coding by c++17
 
-nonrecursive function definition
+variable, nonrecursive function, functional definition
 ![img](https://github.com/christoffel1989/C_Intepretor/blob/master/1.gif)
 
-recursive function definition
+pointer reference and dereference
 ![img](https://github.com/christoffel1989/C_Intepretor/blob/master/2.gif)
 
-functional definition
+self-increment and decriment
 ![img](https://github.com/christoffel1989/C_Intepretor/blob/master/3.gif)
 
-loop
-
+recursive function
 ![img](https://github.com/christoffel1989/C_Intepretor/blob/master/4.gif)
 
-error report
+for loop
 ![img](https://github.com/christoffel1989/C_Intepretor/blob/master/5.gif)
+
+scope hidden
+![img](https://github.com/christoffel1989/C_Intepretor/blob/master/6.gif)
+
+error report
+![img](https://github.com/christoffel1989/C_Intepretor/blob/master/7.gif)
