@@ -112,24 +112,6 @@ double translateDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode>
 				rval = executeAST(astR, env);
 			}
 
-			/*//std::variant的visit模式来处理不同值类型的情况(还未成功)
-			auto fun = [rval, iaddr, op](auto&& arg) 
-			{
-				using T = std::decay_t<decltype(arg)>;
-				//计算结果如果是double或者VarAddress类型
-				if constexpr (std::is_same_v<T, double> || std::is_same_v<T, VarAddress>)
-				{
-					return auxDeRefAST<LVal, Self, T>(rval, arg, iaddr, op);
-				}
-				//计算结果是函数
-				else
-				{
-					//抛出异常
-					throw std::runtime_error("error(Deref pointer): function can not be deref!\n");
-				}
-			};
-			std::visit(fun, v.value());*/
-
 			//如果计算结果是double
 			if (std::holds_alternative<double>(v.value()))
 			{
@@ -706,7 +688,15 @@ double translateIncrementAST(std::shared_ptr<ASTNode> ast, Environment* env, OP 
 		throw std::runtime_error("error(++ or --): undefine symbol!\n");
 	}
 
-	return post ? prev : after;
+	//根据post的是true还是false确定是返回自加之前还是自加之后的值
+	if constexpr (post)
+	{
+		return prev;
+	}
+	else
+	{
+		return after;
+	}
 }
 
 //谓词忽略

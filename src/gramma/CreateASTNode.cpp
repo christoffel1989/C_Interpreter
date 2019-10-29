@@ -80,77 +80,40 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 	tie(tk, input) = parseToken(input);
 
 	//根据token的类型区别进行不同情况的处理
-	if (tk.type == TokenType::Number)
+	//数字、+、-、!或者&变量求地址
+	if (isoneof(tk.type, TokenType::Number, TokenType::Plus, TokenType::Minus, TokenType::Not, TokenType::And))
 	{
 		//创建父节点
 		parent = std::make_shared<ASTNode>();
 		//设置父节点token
 		parent->tk = tk;
+		//如果符号是&, 则需要把类型转换成Ref存储
+		if (tk.type == TokenType::And)
+		{
+			parent->tk.type = TokenType::Ref;
+		}
+		//如果不是数字而是+、-、!或者&则一个子节点是接下的因子节点
+		if (tk.type != TokenType::Number)
+		{
+			std::shared_ptr<ASTNode> child;
+			std::tie(child, input) = createFactorASTNode(input);
+			parent->childs.push_back(child);
+		}
 	}
-	//正号
-	else if (tk.type == TokenType::Plus)
-	{
-		//创建父节点
-		parent = std::make_shared<ASTNode>();
-		//设置父节点token
-		parent->tk = tk;
-		//创建一个子节点是接下来的一个符号
-		std::shared_ptr<ASTNode> child;
-		std::tie(child, input) = createFactorASTNode(input);
-		parent->childs.push_back(child);
-	}
-	//++
-	else if (tk.type == TokenType::PlusPlus)
+	//++或--
+	else if (isoneof(tk.type, TokenType::PlusPlus, TokenType::MinusMinus))
 	{
 		//读取自定义变量
-		std::tie(tk, input) = expectToken(input, "error(bad syntax): ++ must be followed by variable!", TokenType::UserSymbol);
+		Token tkv;
+		std::tie(tkv, input) = expectToken(input, "error(bad syntax): ++ or -- must be followed by variable!", TokenType::UserSymbol);
 
 		//创建父节点
 		parent = std::make_shared<ASTNode>();
 		//设置父节点token
-		parent->tk.type = TokenType::Increment;
+		parent->tk.type = (tk.type == TokenType::PlusPlus) ? TokenType::Increment : TokenType::Decrement;
 		//创建一个子节点存储自加的变量名
 		auto child = std::make_shared<ASTNode>();
-		child->tk = tk;
-		parent->childs.push_back(child);
-	}
-	//负号
-	else if (tk.type == TokenType::Minus)
-	{
-		//创建父节点
-		parent = std::make_shared<ASTNode>();
-		//设置父节点token
-		parent->tk = tk;
-		//创建一个子节点是接下来的一个符号
-		std::shared_ptr<ASTNode> child;
-		std::tie(child, input) = createFactorASTNode(input);
-		parent->childs.push_back(child);
-	}
-	//--
-	else if (tk.type == TokenType::MinusMinus)
-	{
-		//读取自定义变量
-		std::tie(tk, input) = expectToken(input, "error(bad syntax): -- must be followed by variable!", TokenType::UserSymbol);
-
-		//创建父节点
-		parent = std::make_shared<ASTNode>();
-		//设置父节点token
-		parent->tk.type = TokenType::Decrement;
-		//创建一个子节点存储自加的变量名
-		auto child = std::make_shared<ASTNode>();
-		child->tk = tk;
-		parent->childs.push_back(child);
-	}
-	//!号
-	else if (tk.type == TokenType::Not)
-	{
-		//创建父节点
-		parent = std::make_shared<ASTNode>();
-		//设置父节点token
-		parent->tk = tk;
-		//创建一个子节点是接下来的一个符号
-		std::shared_ptr<ASTNode> child;
-		std::tie(child, input) = createFactorASTNode(input);
+		child->tk = tkv;
 		parent->childs.push_back(child);
 	}
 	//&变量求地址

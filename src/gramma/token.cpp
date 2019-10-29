@@ -275,7 +275,8 @@ std::tuple<Token, std::string> parseToken(std::string input)
 	while (iter != input.end())
 	{
 		ch = *iter;
-		if (ch == ' ' || ch == '\n')
+		//吸收掉空格、tab、回车以及换行
+		if (isoneof(ch, ' ', '\t', '\n', '\r'))
 		{
 			//迭代器往前
 			++iter;
