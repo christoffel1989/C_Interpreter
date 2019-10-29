@@ -40,7 +40,7 @@ double astmod(double a, double b)
 	return ia % ib;
 }
 
-//翻译取地址语法节点
+//解释取地址语法节点
 double interpreteRefAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	auto node = *(ast->childs.begin());
@@ -160,7 +160,7 @@ double interpreteDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode
 	}
 }
 
-//翻译赋值符号语法节点
+//解释赋值符号语法节点
 double interpreteAssignAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	auto iter = ast->childs.begin();
@@ -220,7 +220,7 @@ double interpreteAssignAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	}
 }
 
-//翻译由中括号包起来的语句块
+//解释由中括号包起来的语句块
 double interpreteBlockAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	auto& childs = ast->childs;
@@ -237,7 +237,7 @@ double interpreteBlockAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	return result;
 }
 
-//翻译if语法节点
+//解释if语法节点
 double interpreteIfAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	//构造一个调用函数新的环境
@@ -272,7 +272,7 @@ struct ContinueState {};
 //break跳转抛出的异常
 struct BreakState {};
 
-//翻译while语法节点
+//解释while语法节点
 double interpreteWhileAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	//构造一个调用函数新的环境
@@ -314,7 +314,7 @@ double interpreteWhileAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	return result;
 }
 
-//翻译do while语法节点
+//解释do while语法节点
 double interpreteDoWhileAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	//构造一个调用函数新的环境
@@ -356,7 +356,7 @@ double interpreteDoWhileAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	return result;
 }
 
-//翻译for语法节点
+//解释for语法节点
 double interpreteForAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	//构造一个调用函数新的环境
@@ -402,7 +402,7 @@ double interpreteForAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	return result;
 }
 
-//翻译定义变量语法节点
+//解释定义变量语法节点
 double interpreteDefVarAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	//自定义变量
@@ -422,7 +422,7 @@ double interpreteDefVarAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	return result;
 }
 
-//翻译定义指针变量语法节点
+//解释定义指针变量语法节点
 double interpreteDefPointerAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	//自定义变量
@@ -452,7 +452,7 @@ double interpreteDefPointerAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	return daddr;
 }
 
-//翻译定义函数语法节点
+//解释定义函数语法节点
 double interpreteDefProcAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	auto& childs = ast->childs;
@@ -481,7 +481,7 @@ double interpreteDefProcAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	return 0;
 }
 
-//翻译系统自定义符号语法节点
+//解释系统自定义符号语法节点
 double interpretePrimitiveSymboAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	auto tk = ast->tk;
@@ -509,7 +509,7 @@ double interpretePrimitiveSymboAST(std::shared_ptr<ASTNode> ast, Environment* en
 	return result;
 }
 
-//翻译用户自定义符号语法节点
+//解释用户自定义符号语法节点
 double interpreteUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	auto tk = ast->tk;
@@ -609,7 +609,7 @@ double interpreteUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	return result;
 }
 
-//翻译一元运算节点的模板
+//解释一元运算节点的模板
 template<typename OP>
 double interpreteOp1AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op)
 {
@@ -653,7 +653,7 @@ double interpreteOp1AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op)
 	return result;
 }
 
-//翻译二元运算节点的模板
+//解释二元运算节点的模板
 template<typename OP, typename PRED>
 double interpreteOp2AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op, PRED pred)
 {
@@ -677,7 +677,7 @@ double interpreteOp2AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op, P
 	}
 }
 
-//翻译自增自运算节点的模板
+//解释自增自运算节点的模板
 template<bool post, typename OP>
 double interpreteIncrementAST(std::shared_ptr<ASTNode> ast, Environment* env, OP op)
 {
@@ -768,7 +768,7 @@ static std::unordered_map<TokenType, std::function<double(PAST, PENV)>> ASTTable
 	{ TokenType::End, [](PAST, PENV) { return 0; } },
 };
 
-//翻译语法节点(总入口)
+//解释语法节点(总入口)
 double interpreteAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
 	double result;
