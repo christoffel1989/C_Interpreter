@@ -17,7 +17,7 @@ inline std::tuple<Token, std::string> expectToken(std::string input, std::string
 	return pack;
 }
 
-//创建空语句
+//创建空语句的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createNOpASTNode(std::string input)
 {
 	//读取分号
@@ -31,7 +31,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createNOpASTNode(std::string i
 	return { parent, input };
 }
 
-//创建解引用表达式
+//创建解引用表达式的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createDeRefASTNode(std::string input)
 {
 	Token tk;
@@ -372,7 +372,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createLogicASTNode(std::string
 			std::tie(child2, input) = createRelationASTNode(str);
 			//创建父节点
 			parent = std::make_shared<ASTNode>();
-			//设置父节点token (parse和translate的时候And、Or的含义不同 AndAnd变成与(And) And变成取地址(Address))
+			//设置父节点token (parse和interprete的时候And、Or的含义不同 AndAnd变成与(And) And变成取地址(Address))
 			parent->tk.type = (op.type == TokenType::AndAnd) ? TokenType::And : TokenType::Or;
 			//子节点1和2与父节点相连
 			parent->childs.push_back(child1);
@@ -515,7 +515,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 	return { parent, input };
 }
 
-//创建语句块的语法树
+//创建语句块的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createBlockASTNode(std::string input)
 {
 	Token tk;
@@ -563,7 +563,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createBlockASTNode(std::string
 	return { parent, input };
 }
 
-//创建条件语句的语法树
+//创建条件语句的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createIfASTNode(std::string input)
 {
 	Token tk;
@@ -618,7 +618,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createIfASTNode(std::string in
 	return { parent, input };
 }
 
-//创建条件语句的语法树
+//创建条件语句的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createElseIfASTNode(std::string input)
 {
 	Token tk;
@@ -673,7 +673,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createElseIfASTNode(std::strin
 	return { parent, input };
 }
 
-//创建while语句的语法树
+//创建while语句的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createWhileASTNode(std::string input)
 {
 	Token tk;
@@ -708,7 +708,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createWhileASTNode(std::string
 	return { parent, input };
 }
 
-//创建DoWhile语句的语法树
+//创建DoWhile语句的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createDoWhileASTNode(std::string input)
 {
 	Token tk;
@@ -749,7 +749,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createDoWhileASTNode(std::stri
 	return { parent, input };
 }
 
-//创建for语句的语法树
+//创建for语句的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createForASTNode(std::string input)
 {
 	Token tk;
@@ -804,7 +804,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createForASTNode(std::string i
 	return { parent, input };
 }
 
-//创建break或者continue语句的语法树
+//创建break或者continue语句的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createBreakorContinueASTNode(std::string input)
 {
 	Token tk;
@@ -819,7 +819,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createBreakorContinueASTNode(s
 	return { parent, input };
 }
 
-//创建return语句的语法树
+//创建return语句的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createReturnASTNode(std::string input)
 {
 	//读取关键字return
@@ -920,7 +920,7 @@ static std::unordered_map<TokenType, std::tuple<std::shared_ptr<ASTNode>, std::s
 	{ TokenType::End, createNOpASTNode }
 };
 
-//创建一般语句的语法树
+//创建语法树节点(总入口)
 std::tuple<std::shared_ptr<ASTNode>, std::string> createStatementASTNode(std::string input)
 {
 	std::shared_ptr<ASTNode> parent;

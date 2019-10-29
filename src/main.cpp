@@ -1,6 +1,6 @@
 ﻿#include "ASTNode.h"
 #include "CreateASTNode.h"
-#include "TranslateASTNode.h"
+#include "InterpreteASTNode.h"
 
 #include "AuxFacility.h"
 
@@ -27,7 +27,7 @@ int main(int argc, char* argv[])
 				//输入->语法树
 				auto[ast, res] = createStatementASTNode(input);
 				//语法数->输出
-				auto result = executeAST(ast, &GlobalEnv);
+				auto result = interpreteAST(ast, &GlobalEnv);
 				//根据语法树根节点的属性输出相应的信息
 				//函数定义
 				if (ast->tk.type == TokenType::DefProc)
