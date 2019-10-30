@@ -91,6 +91,8 @@ static std::unordered_map<char, TokenType> Tk1Table
 	{'%', TokenType::Mod},
 	{'(', TokenType::Lp},
 	{')', TokenType::Rp},
+	{'[', TokenType::LBracket},
+	{']', TokenType::RBracket},
 	{'{', TokenType::LBrace},
 	{'}', TokenType::RBrace},
 	{',', TokenType::Comma},

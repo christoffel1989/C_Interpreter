@@ -31,6 +31,15 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createNOpASTNode(std::string i
 	return { parent, input };
 }
 
+//创建在现有表达式基础上添加++或--的后缀
+std::shared_ptr<ASTNode> createPostIncOrDec(std::shared_ptr<ASTNode> node, TokenType type)
+{
+	auto parent = std::make_shared<ASTNode>();
+	parent->tk.type = (type == TokenType::PlusPlus) ? TokenType::PostIncrement : TokenType::PostDecrement;
+	parent->childs.push_back(node);
+	return parent;
+}
+
 //创建解引用表达式的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createDeRefASTNode(std::string input)
 {
@@ -64,7 +73,6 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createDeRefASTNode(std::string
 		//再解析一个右括号
 		std::tie(tk, input) = expectToken(input, "error(bad syntax): miss a )!", TokenType::Rp);
 	}
-
 	parent->childs.push_back(child);
 
 	return { parent, input };
@@ -80,8 +88,8 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 	tie(tk, input) = parseToken(input);
 
 	//根据token的类型区别进行不同情况的处理
-	//数字、+、-、!或者&变量求地址
-	if (isoneof(tk.type, TokenType::Number, TokenType::Plus, TokenType::Minus, TokenType::Not, TokenType::And))
+	//数字、+、-、++、--、!或者&变量求地址
+	if (isoneof(tk.type, TokenType::Number, TokenType::Plus, TokenType::Minus, TokenType::Not, TokenType::And, TokenType::PlusPlus, TokenType::MinusMinus))
 	{
 		//创建父节点
 		parent = std::make_shared<ASTNode>();
@@ -92,6 +100,16 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 		{
 			parent->tk.type = TokenType::Ref;
 		}
+		//如果符号是++，则需要把类型转换成前置自加1存储
+		else if (tk.type == TokenType::PlusPlus)
+		{
+			parent->tk.type = TokenType::Increment;
+		}
+		//如果符号是--，则需要把类型转换成前置自减1存储
+		else if (tk.type == TokenType::MinusMinus)
+		{
+			parent->tk.type = TokenType::Decrement;
+		}
 		//如果不是数字而是+、-、!或者&则一个子节点是接下的因子节点
 		if (tk.type != TokenType::Number)
 		{
@@ -100,42 +118,22 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 			parent->childs.push_back(child);
 		}
 	}
-	//++或--
-	else if (isoneof(tk.type, TokenType::PlusPlus, TokenType::MinusMinus))
-	{
-		//读取自定义变量
-		Token tkv;
-		std::tie(tkv, input) = expectToken(input, "error(bad syntax): ++ or -- must be followed by variable!", TokenType::UserSymbol);
-
-		//创建父节点
-		parent = std::make_shared<ASTNode>();
-		//设置父节点token
-		parent->tk.type = (tk.type == TokenType::PlusPlus) ? TokenType::Increment : TokenType::Decrement;
-		//创建一个子节点存储自加的变量名
-		auto child = std::make_shared<ASTNode>();
-		child->tk = tkv;
-		parent->childs.push_back(child);
-	}
-	//&变量求地址
-	else if (tk.type == TokenType::And)
-	{
-		//读取自定义变量
-		std::tie(tk, input) = expectToken(input, "error(bad syntax): reference(&) must be followed by variable!", TokenType::UserSymbol);
-
-		//创建父节点
-		parent = std::make_shared<ASTNode>();
-		//设置父节点token
-		parent->tk.type = TokenType::Ref;
-		//创建一个子节点存储自加的变量名
-		auto child = std::make_shared<ASTNode>();
-		child->tk = tk;
-		parent->childs.push_back(child);
-	}
 	//*变量解引用
 	else if (tk.type == TokenType::Mul)
 	{
 		//把*号补回去再解析
 		std::tie(parent, input) = createDeRefASTNode("*" + input);
+
+		//再读一个token如果是++或者--
+		std::string res;
+		std::tie(tk, res) = parseToken(input);
+		if (isoneof(tk.type, TokenType::PlusPlus, TokenType::MinusMinus))
+		{
+			//把parent节点添加后缀操作
+			parent = createPostIncOrDec(parent, tk.type);
+			//补回丢掉的变量
+			input = res;
+		}
 	}
 	//左括号
 	else if (tk.type == TokenType::Lp)
@@ -145,6 +143,17 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 
 		//读取右括号
 		std::tie(tk, input) = expectToken(input, "error(bad syntax): miss a )!", TokenType::Rp);
+
+		//再读一个token如果是++或者--
+		std::string res;
+		std::tie(tk, res) = parseToken(input);
+		if (isoneof(tk.type, TokenType::PlusPlus, TokenType::MinusMinus))
+		{
+			//把parent节点添加后缀操作
+			parent = createPostIncOrDec(parent, tk.type);
+			//补回丢掉的变量
+			input = res;
+		}
 	}
 	//Primitive Symbol
 	else if (tk.type == TokenType::PrimitiveSymbol)
@@ -221,13 +230,35 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 				input = res2;
 			}
 		}
-		//如果是++
-		else if (isoneof(tk.type, TokenType::PlusPlus, TokenType::MinusMinus))
+		//如果是左中括号
+		else if (tk.type == TokenType::LBracket)
 		{
-			auto child = parent;
+			//按照把变量和[]号中的表达式合起来做成一个加法语法树节点
+			auto child1 = parent;
+			decltype(parent) child2;
+			//创建算术迹点
+			std::tie(child2, input) = createArithmeticASTNode(res1);
+			//再读取一个右中括号
+			std::tie(tk, input) = expectToken(input, "error(bad syntax): miss a ]!", TokenType::RBracket);
+			//构建加法节点
+			auto plusnode = std::make_shared<ASTNode>();
+			plusnode->tk.type = TokenType::Plus;
+			//把child1和child2添加进入分别作为左加数和右加数
+			plusnode->childs.push_back(child1);
+			plusnode->childs.push_back(child2);
+			//构建引用节点(绑定在parent上)
 			parent = std::make_shared<ASTNode>();
-			parent->tk.type = (tk.type == TokenType::PlusPlus) ? TokenType::PostIncrement : TokenType::PostDecrement;
-			parent->childs.push_back(child);
+			parent->tk.type = TokenType::DeRef;
+			parent->childs.push_back(plusnode);
+		}
+
+		//从input开始继续查询下一个符号(不接着上一个else是因为存在耦合体现不出优先级)
+		tie(tk, res1) = parseToken(input);
+		//如果是++或--
+		if (isoneof(tk.type, TokenType::PlusPlus, TokenType::MinusMinus))
+		{
+			//把parent节点添加后缀操作
+			parent = createPostIncOrDec(parent, tk.type);
 			//补回丢掉的变量
 			input = res1;
 		}

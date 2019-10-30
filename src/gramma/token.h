@@ -39,7 +39,9 @@ enum class TokenType
 	Not,
 	And,
 	Or,
+	//&&
 	AndAnd,
+	//||
 	OrOr,
 	//变量引用(获得指针)
 	Ref,
@@ -48,8 +50,13 @@ enum class TokenType
 	//括号
 	Lp,
 	Rp,
+	//中括号
+	LBracket,
+	RBracket,
+	//大括号
 	LBrace,
 	RBrace,
+	//逗号
 	Comma,
 	//分号
 	End,
