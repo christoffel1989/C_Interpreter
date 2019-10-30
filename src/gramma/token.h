@@ -72,6 +72,8 @@ enum class TokenType
 	DefProc,
 	//定义指针
 	DefPointer,
+	//定义数组
+	DefArray,
 	//赋值
 	Assign,
 	//条件分支

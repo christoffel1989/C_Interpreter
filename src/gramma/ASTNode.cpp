@@ -35,6 +35,23 @@ void registEnvSymbol(std::string symbol, UserAST value, Environment* env)
 	setStackTop(top + 1);
 }
 
+//注册新的数组类型变量到当前环境 变量本身存储了数组首地址的指针
+void registEnvSymbol(std::string symbol, std::vector<UserAST> values, Environment* env)
+{
+	auto top = getStackTop();
+	//先存储元素
+	for (const auto& value : values)
+	{
+		//当前栈顶设置新的值 设置完以后上移栈顶
+		StackMemory[top++] = value;
+	}
+	//最后再存储symbol指针
+	StackMemory[top] = getStackTop();
+	env->address[symbol] = top;
+	//设置新的栈顶
+	setStackTop(top + 1);
+}
+
 //设置用户自定义符号(变量或函数)的值
 void setEnvSymbol(std::string symbol, UserAST value, Environment* env)
 {

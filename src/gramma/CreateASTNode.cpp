@@ -32,12 +32,100 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createNOpASTNode(std::string i
 }
 
 //创建在现有表达式基础上添加++或--的后缀
-std::shared_ptr<ASTNode> createPostIncOrDec(std::shared_ptr<ASTNode> node, TokenType type)
+std::shared_ptr<ASTNode> createPostIncOrDecASTNode(std::shared_ptr<ASTNode> node, TokenType type)
 {
 	auto parent = std::make_shared<ASTNode>();
 	parent->tk.type = (type == TokenType::PlusPlus) ? TokenType::PostIncrement : TokenType::PostDecrement;
 	parent->childs.push_back(node);
 	return parent;
+}
+
+//在变量名节点的基础上创建数组语法节点(即从[开始继续解析)
+std::tuple<std::shared_ptr<ASTNode>, std::string> createDefArrayASTNode(std::shared_ptr<ASTNode> node, std::string input)
+{
+	//创建待返回的节点
+	auto parent = std::make_shared<ASTNode>();
+	parent->tk.type = TokenType::DefArray;
+	//创建存储了数组初始化值得节点数组
+	std::vector<std::shared_ptr<ASTNode>> vnodes;
+
+	Token tk;
+	//读取左中括号
+	std::tie(tk, input) = expectToken(input, "error(Def array): illegal syntax for defining array!", TokenType::LBracket);
+	//读取数字或者右中括号
+	std::tie(tk, input) = expectToken(input, "error(Def array): illegal syntax for defining array!", TokenType::Number, TokenType::RBracket);
+	//如果读出来的是数字 则为给定数组大小的数组生命
+	if (tk.type == TokenType::Number)
+	{
+		auto N = (unsigned int)std::get<double>(tk.value);
+		vnodes.resize(N);
+		//读取右中括号
+		std::tie(std::ignore, input) = expectToken(input, "error(Def var): illegal syntax for defining array!", TokenType::RBracket);
+		//读取赋值号或者分号或者空
+		auto[tknext, res] = expectToken(input, "error(Def array): illegal syntax for defining array!", TokenType::Assign, TokenType::End, TokenType::Empty);
+		if (tknext.type == TokenType::Assign)
+		{
+			//读取左大括号
+			std::tie(tk, input) = expectToken(res, "error(Def array): need a {!", TokenType::LBrace);
+			//读取数组初始化的各个元素值
+			for (decltype(N) i = 0; i < N; i++)
+			{
+				//获取第i个元素的语法节点
+				std::tie(vnodes[i], input) = createArithmeticASTNode(input);
+				//如果不是最后一个元素则再读取一个逗号
+				if (i != N - 1)
+				{
+					//读取左中括号
+					std::tie(std::ignore, input) = expectToken(input, "error(Def array): array elment num mismatch!", TokenType::Comma);
+				}
+			}
+			//读取右大括号
+			std::tie(tk, input) = expectToken(input, "error(Def array): array elment num mismatch!", TokenType::RBrace);
+		}
+		//默认初始化
+		else
+		{
+			//全部都用数字0初始化
+			for (decltype(N) i = 0; i < N; i++)
+			{
+				vnodes[i] = std::make_shared<ASTNode>();
+				vnodes[i]->tk = { TokenType::Number, double(0) };
+			}
+		}
+	}
+	//是右中括号 数组元素个数右赋值号右侧的大括号中的元素个数决定
+	else
+	{
+		//读取赋值号
+		auto[tknext, res] = expectToken(input, "error(Def array): need a =!", TokenType::Assign);
+		//读取左大括号
+		std::tie(tk, input) = expectToken(res, "error(Def array): need a {!", TokenType::LBrace);
+		do
+		{
+			//获取一个元素的语法节点
+			decltype(parent) child;
+			std::tie(child, input) = createArithmeticASTNode(input);
+			//添加到vector中
+			vnodes.push_back(child);
+			//读取一个token
+			std::tie(tk, input) = parseToken(input);
+		} while (tk.type == TokenType::Comma);
+
+		//如果停下来的时候不是右括号则报错
+		if (tk.type != TokenType::RBrace)
+		{
+			throw std::runtime_error("error(Def array): need a }!\n");
+		}
+	}
+
+	//把定义的数组变量名添加到parent的childs中
+	parent->childs.push_back(node);
+	//把所有读出来的参量添加到parent的childs中
+	for (const auto& vnode : vnodes)
+	{
+		parent->childs.push_back(vnode);
+	}
+	return { parent, input };
 }
 
 //创建解引用表达式的语法树节点
@@ -130,18 +218,18 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 		if (isoneof(tk.type, TokenType::PlusPlus, TokenType::MinusMinus))
 		{
 			//把parent节点添加后缀操作
-			parent = createPostIncOrDec(parent, tk.type);
+			parent = createPostIncOrDecASTNode(parent, tk.type);
 			//补回丢掉的变量
 			input = res;
 		}
 	}
-	//左括号
+	//左小括号
 	else if (tk.type == TokenType::Lp)
 	{
 		//括号中的表达式
 		tie(parent, input) = createExpressionASTNode(input);
 
-		//读取右括号
+		//读取右小括号
 		std::tie(tk, input) = expectToken(input, "error(bad syntax): miss a )!", TokenType::Rp);
 
 		//再读一个token如果是++或者--
@@ -150,7 +238,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 		if (isoneof(tk.type, TokenType::PlusPlus, TokenType::MinusMinus))
 		{
 			//把parent节点添加后缀操作
-			parent = createPostIncOrDec(parent, tk.type);
+			parent = createPostIncOrDecASTNode(parent, tk.type);
 			//补回丢掉的变量
 			input = res;
 		}
@@ -169,14 +257,14 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 		//如果是1元函数
 		if (std::holds_alternative<std::function<double(double)>>(primitive))
 		{
-			//读取左括号
+			//读取左小括号
 			std::tie(tk, input) = expectToken(input, "error(bad syntax): function call miss a (!", TokenType::Lp);
 
 			//解析括号中的函数输入参量
 			std::shared_ptr<ASTNode> child;
 			std::tie(child, input) = createExpressionASTNode(input);
 
-			//读取右括号
+			//读取右小括号
 			std::tie(tk, input) = expectToken(input, "error(bad syntax): not enough arguments for function call or function call miss a )!", TokenType::Rp);
 
 			//将链接父和子节点
@@ -197,7 +285,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 		//解析下一个字符
 		std::string res1, res2;
 		tie(tk, res1) = parseToken(input);
-		//如果是左括号
+		//如果是左小括号
 		if (tk.type == TokenType::Lp)
 		{
 			//解析下一个字符
@@ -217,7 +305,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 					tie(tk, input) = parseToken(input);
 				} while (tk.type == TokenType::Comma);
 
-				//如果不是右括号则报错
+				//如果不是小右括号则报错
 				if (tk.type != TokenType::Rp)
 				{
 					//报一个错误
@@ -258,7 +346,7 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createFactorASTNode(std::strin
 		if (isoneof(tk.type, TokenType::PlusPlus, TokenType::MinusMinus))
 		{
 			//把parent节点添加后缀操作
-			parent = createPostIncOrDec(parent, tk.type);
+			parent = createPostIncOrDecASTNode(parent, tk.type);
 			//补回丢掉的变量
 			input = res1;
 		}
@@ -443,14 +531,14 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 			parent = std::make_shared<ASTNode>();
 			//结点类型为赋值
 			parent->tk.type = TokenType::DefVar;
-			//创建代表被赋值变量的子节点
+			//创建代表被赋值变量名字的子节点
 			auto child = std::make_shared<ASTNode>();
 			child->tk = tk;
 			//child与parent连接
 			parent->childs.push_back(child);
 
-			//读取赋值符号或者分号或者啥也没有
-			auto[tknext, res] = expectToken(input, "error(Def var): illegal syntax for defining varible!", TokenType::Assign, TokenType::End, TokenType::Empty);
+			//读取赋值符号或者中括号或者分号或者啥也没有
+			auto[tknext, res] = expectToken(input, "error(Def var): illegal syntax for defining varible!", TokenType::Assign, TokenType::LBracket, TokenType::End, TokenType::Empty);
 
 			//读出来的是赋值号
 			if (tknext.type == TokenType::Assign)
@@ -460,13 +548,18 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 				//child与parent连接
 				parent->childs.push_back(child);
 			}
+			//读出来的是中括号 则定义的是数组
+			else if (tknext.type == TokenType::LBracket)
+			{
+				//创建定义数组的语法节点
+				std::tie(parent, input) = createDefArrayASTNode(child, input);
+			}
 			//读出来的是分号或者空
 			else
 			{
 				//创建一个数值为0的节点使得变量初始化为0
 				child = std::make_shared<ASTNode>();
-				child->tk.type = TokenType::Number;
-				child->tk.value = double(0);
+				child->tk = { TokenType::Number, double(0) };
 				//child与parent连接
 				parent->childs.push_back(child);
 			}
@@ -487,8 +580,8 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 			//child与parent连接
 			parent->childs.push_back(child);
 
-			//读取赋值符号或者分号或者啥也没有
-			auto[tknext, res] = expectToken(input, "error(Def var): illegal syntax for defining pointer!", TokenType::Assign, TokenType::End, TokenType::Empty);
+			//读取赋值符号或者中括号或者分号或者啥也没有
+			auto[tknext, res] = expectToken(input, "error(Def var): illegal syntax for defining pointer!", TokenType::Assign, TokenType::LBracket, TokenType::End, TokenType::Empty);
 
 			//读出来的是赋值号
 			if (tknext.type == TokenType::Assign)
@@ -498,13 +591,17 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 				//child与parent连接
 				parent->childs.push_back(child);
 			}
+			//读出来的是中括号 则定义的是数组
+			else if (tknext.type == TokenType::LBracket)
+			{
+				std::tie(parent, input) = createDefArrayASTNode(parent, input);
+			}
 			//读出来的是分号或者空
 			else
 			{
 				//创建一个数值为0的节点使得变量初始化为0
 				child = std::make_shared<ASTNode>();
-				child->tk.type = TokenType::Number;
-				child->tk.value = double(0);
+				child->tk = { TokenType::Number, double(0) };
 				//child与parent连接
 				parent->childs.push_back(child);
 			}

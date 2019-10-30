@@ -3,6 +3,7 @@
 #include "Token.h"
 
 #include <tuple>
+#include <vector>
 #include <list>
 #include <unordered_map>
 #include <memory>
@@ -58,6 +59,9 @@ using UserAST = std::variant<double, std::tuple<std::list<std::string>, std::sha
 
 //注册新的变量或函数在当前环境
 void registEnvSymbol(std::string symbol, UserAST value, Environment* env);
+
+//注册新的数组类型变量到当前环境 变量本身存储了数组首地址的指针
+void registEnvSymbol(std::string symbol, std::vector<UserAST> values, Environment* env);
 
 //设置用户自定义符号(变量或函数)的值
 void setEnvSymbol(std::string symbol, UserAST value, Environment* env);

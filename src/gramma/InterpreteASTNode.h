@@ -29,6 +29,9 @@ double interpreteDefVarAST(std::shared_ptr<ASTNode> ast, Environment* env);
 //解释定义指针变量语法节点
 double interpreteDefPointerAST(std::shared_ptr<ASTNode> ast, Environment* env);
 
+//解释定义数组变量的语法节点
+double interpreteDefArrayAST(std::shared_ptr<ASTNode> ast, Environment* env);
+
 //解释定义函数语法节点
 double interpreteDefProcAST(std::shared_ptr<ASTNode> ast, Environment* env);
 

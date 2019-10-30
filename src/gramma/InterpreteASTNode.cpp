@@ -456,6 +456,33 @@ double interpreteDefPointerAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	return daddr;
 }
 
+//解释定义数组变量的语法节点
+double interpreteDefArrayAST(std::shared_ptr<ASTNode> ast, Environment* env)
+{
+	//自定义变量
+	auto iter = ast->childs.begin();
+	//获得变量名字
+	auto symbol = std::get<std::string>((*iter)->tk.value);
+	//如果在当前环境中已经定义则也报错
+	if (getEnvSymbol(symbol, env, true))
+	{
+		throw std::runtime_error("error(Def array): " + symbol + " redefined!\n");
+	}
+	//获取数组元素个数
+	auto N = ast->childs.size() - 1;
+	std::vector<UserAST> values(N);
+	//计算每一个初始化元素的值
+	for (decltype(N) i = 0; i < N; i++)
+	{
+		values[i] = double(interpreteAST(*(++iter), env));
+	}
+	//注册变量
+	registEnvSymbol(symbol, values, env);
+
+	//返回数组最后一个元素
+	return std::get<double>(values[N - 1]);
+}
+
 //解释定义函数语法节点
 double interpreteDefProcAST(std::shared_ptr<ASTNode> ast, Environment* env)
 {
@@ -843,6 +870,7 @@ static std::unordered_map<TokenType, std::function<double(PAST, PENV)>> ASTInter
 	{ TokenType::For, interpreteForAST },
 	{ TokenType::DefVar, interpreteDefVarAST },
 	{ TokenType::DefPointer, interpreteDefPointerAST },
+	{ TokenType::DefArray, interpreteDefArrayAST },
 	{ TokenType::DefProc, interpreteDefProcAST },
 	{ TokenType::Number, [](PAST ast, PENV env) { return std::get<double>(ast->tk.value); } },
 	{ TokenType::PrimitiveSymbol, interpretePrimitiveSymboAST },
