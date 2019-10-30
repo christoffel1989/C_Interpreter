@@ -13,7 +13,7 @@ self-increment and decriment
 recursive function
 ![img](https://github.com/christoffel1989/C_Interpreter/blob/master/4.gif)
 
-for loop
+array definition and for loop
 ![img](https://github.com/christoffel1989/C_Interpreter/blob/master/5.gif)
 
 scope hidden
