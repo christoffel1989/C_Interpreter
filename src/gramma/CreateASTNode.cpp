@@ -439,9 +439,6 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 		//定义非指针类型变量
 		if (tk.type == TokenType::UserSymbol)
 		{
-			//读取赋值符号
-			std::tie(std::ignore, input) = expectToken(input, "error(Def var): miss = for defining varible!", TokenType::Assign);
-
 			//创建赋值父节点
 			parent = std::make_shared<ASTNode>();
 			//结点类型为赋值
@@ -451,19 +448,34 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 			child->tk = tk;
 			//child与parent连接
 			parent->childs.push_back(child);
-			//创建代表赋值=号右边表达式的语句
-			std::tie(child, input) = createExpressionASTNode(input);
-			//child与parent连接
-			parent->childs.push_back(child);
+
+			//读取赋值符号或者分号或者啥也没有
+			auto[tknext, res] = expectToken(input, "error(Def var): illegal syntax for defining varible!", TokenType::Assign, TokenType::End, TokenType::Empty);
+
+			//读出来的是赋值号
+			if (tknext.type == TokenType::Assign)
+			{
+				//创建代表赋值=号右边表达式的语句
+				std::tie(child, input) = createExpressionASTNode(res);
+				//child与parent连接
+				parent->childs.push_back(child);
+			}
+			//读出来的是分号或者空
+			else
+			{
+				//创建一个数值为0的节点使得变量初始化为0
+				child = std::make_shared<ASTNode>();
+				child->tk.type = TokenType::Number;
+				child->tk.value = double(0);
+				//child与parent连接
+				parent->childs.push_back(child);
+			}
 		}
 		//定义指针类型变量
 		else if (tk.type == TokenType::Mul)
 		{
 			//读取定义的变量名
 			std::tie(tk, input) = expectToken(input, "error(Def pointer): need a symbol to reprensent pointer name!", TokenType::UserSymbol);
-
-			//读取赋值符号
-			std::tie(std::ignore, input) = expectToken(input, "error(Def var): miss = for defining varible!", TokenType::Assign);
 
 			//创建赋值父节点
 			parent = std::make_shared<ASTNode>();
@@ -474,10 +486,28 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createExpressionASTNode(std::s
 			child->tk = tk;
 			//child与parent连接
 			parent->childs.push_back(child);
-			//创建代表赋值=号右边算表达式语句
-			std::tie(child, input) = createArithmeticASTNode(input);
-			//child与parent连接
-			parent->childs.push_back(child);
+
+			//读取赋值符号或者分号或者啥也没有
+			auto[tknext, res] = expectToken(input, "error(Def var): illegal syntax for defining pointer!", TokenType::Assign, TokenType::End, TokenType::Empty);
+
+			//读出来的是赋值号
+			if (tknext.type == TokenType::Assign)
+			{
+				//创建代表赋值=号右边算表达式语句
+				std::tie(child, input) = createArithmeticASTNode(res);
+				//child与parent连接
+				parent->childs.push_back(child);
+			}
+			//读出来的是分号或者空
+			else
+			{
+				//创建一个数值为0的节点使得变量初始化为0
+				child = std::make_shared<ASTNode>();
+				child->tk.type = TokenType::Number;
+				child->tk.value = double(0);
+				//child与parent连接
+				parent->childs.push_back(child);
+			}
 		}
 	}
 	//如果是用户自定义的符号 
