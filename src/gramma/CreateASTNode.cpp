@@ -40,94 +40,6 @@ std::shared_ptr<ASTNode> createPostIncOrDecASTNode(std::shared_ptr<ASTNode> node
 	return parent;
 }
 
-//在变量名节点的基础上创建数组语法节点(即从[开始继续解析)
-std::tuple<std::shared_ptr<ASTNode>, std::string> createDefArrayASTNode(std::shared_ptr<ASTNode> node, std::string input)
-{
-	//创建待返回的节点
-	auto parent = std::make_shared<ASTNode>();
-	parent->tk.type = TokenType::DefArray;
-	//创建存储了数组初始化值得节点数组
-	std::vector<std::shared_ptr<ASTNode>> vnodes;
-
-	Token tk;
-	//读取左中括号
-	std::tie(tk, input) = expectToken(input, "error(Def array): illegal syntax for defining array!", TokenType::LBracket);
-	//读取数字或者右中括号
-	std::tie(tk, input) = expectToken(input, "error(Def array): illegal syntax for defining array!", TokenType::Number, TokenType::RBracket);
-	//如果读出来的是数字 则为给定数组大小的数组生命
-	if (tk.type == TokenType::Number)
-	{
-		auto N = (unsigned int)std::get<double>(tk.value);
-		vnodes.resize(N);
-		//读取右中括号
-		std::tie(std::ignore, input) = expectToken(input, "error(Def var): illegal syntax for defining array!", TokenType::RBracket);
-		//读取赋值号或者分号或者空
-		auto[tknext, res] = expectToken(input, "error(Def array): illegal syntax for defining array!", TokenType::Assign, TokenType::End, TokenType::Empty);
-		if (tknext.type == TokenType::Assign)
-		{
-			//读取左大括号
-			std::tie(tk, input) = expectToken(res, "error(Def array): need a {!", TokenType::LBrace);
-			//读取数组初始化的各个元素值
-			for (decltype(N) i = 0; i < N; i++)
-			{
-				//获取第i个元素的语法节点
-				std::tie(vnodes[i], input) = createArithmeticASTNode(input);
-				//如果不是最后一个元素则再读取一个逗号
-				if (i != N - 1)
-				{
-					//读取左中括号
-					std::tie(std::ignore, input) = expectToken(input, "error(Def array): array elment num mismatch!", TokenType::Comma);
-				}
-			}
-			//读取右大括号
-			std::tie(tk, input) = expectToken(input, "error(Def array): array elment num mismatch!", TokenType::RBrace);
-		}
-		//默认初始化
-		else
-		{
-			//全部都用数字0初始化
-			for (decltype(N) i = 0; i < N; i++)
-			{
-				vnodes[i] = std::make_shared<ASTNode>();
-				vnodes[i]->tk = { TokenType::Number, double(0) };
-			}
-		}
-	}
-	//是右中括号 数组元素个数右赋值号右侧的大括号中的元素个数决定
-	else
-	{
-		//读取赋值号
-		auto[tknext, res] = expectToken(input, "error(Def array): need a =!", TokenType::Assign);
-		//读取左大括号
-		std::tie(tk, input) = expectToken(res, "error(Def array): need a {!", TokenType::LBrace);
-		do
-		{
-			//获取一个元素的语法节点
-			decltype(parent) child;
-			std::tie(child, input) = createArithmeticASTNode(input);
-			//添加到vector中
-			vnodes.push_back(child);
-			//读取一个token
-			std::tie(tk, input) = parseToken(input);
-		} while (tk.type == TokenType::Comma);
-
-		//如果停下来的时候不是右括号则报错
-		if (tk.type != TokenType::RBrace)
-		{
-			throw std::runtime_error("error(Def array): need a }!\n");
-		}
-	}
-
-	//把定义的数组变量名添加到parent的childs中
-	parent->childs.push_back(node);
-	//把所有读出来的参量添加到parent的childs中
-	for (const auto& vnode : vnodes)
-	{
-		parent->childs.push_back(vnode);
-	}
-	return { parent, input };
-}
-
 //创建解引用表达式的语法树节点
 std::tuple<std::shared_ptr<ASTNode>, std::string> createDeRefASTNode(std::string input)
 {
@@ -505,6 +417,94 @@ std::tuple<std::shared_ptr<ASTNode>, std::string> createLogicASTNode(std::string
 		}
 	}
 
+	return { parent, input };
+}
+
+//在变量名节点的基础上创建数组语法节点(即从[开始继续解析)
+std::tuple<std::shared_ptr<ASTNode>, std::string> createDefArrayASTNode(std::shared_ptr<ASTNode> node, std::string input)
+{
+	//创建待返回的节点
+	auto parent = std::make_shared<ASTNode>();
+	parent->tk.type = TokenType::DefArray;
+	//创建存储了数组初始化值得节点数组
+	std::vector<std::shared_ptr<ASTNode>> vnodes;
+
+	Token tk;
+	//读取左中括号
+	std::tie(tk, input) = expectToken(input, "error(Def array): illegal syntax for defining array!", TokenType::LBracket);
+	//读取数字或者右中括号
+	std::tie(tk, input) = expectToken(input, "error(Def array): illegal syntax for defining array!", TokenType::Number, TokenType::RBracket);
+	//如果读出来的是数字 则为给定数组大小的数组生命
+	if (tk.type == TokenType::Number)
+	{
+		auto N = (unsigned int)std::get<double>(tk.value);
+		vnodes.resize(N);
+		//读取右中括号
+		std::tie(std::ignore, input) = expectToken(input, "error(Def var): illegal syntax for defining array!", TokenType::RBracket);
+		//读取赋值号或者分号或者空
+		auto[tknext, res] = expectToken(input, "error(Def array): illegal syntax for defining array!", TokenType::Assign, TokenType::End, TokenType::Empty);
+		if (tknext.type == TokenType::Assign)
+		{
+			//读取左大括号
+			std::tie(tk, input) = expectToken(res, "error(Def array): need a {!", TokenType::LBrace);
+			//读取数组初始化的各个元素值
+			for (decltype(N) i = 0; i < N; i++)
+			{
+				//获取第i个元素的语法节点
+				std::tie(vnodes[i], input) = createArithmeticASTNode(input);
+				//如果不是最后一个元素则再读取一个逗号
+				if (i != N - 1)
+				{
+					//读取左中括号
+					std::tie(std::ignore, input) = expectToken(input, "error(Def array): array elment num mismatch!", TokenType::Comma);
+				}
+			}
+			//读取右大括号
+			std::tie(tk, input) = expectToken(input, "error(Def array): array elment num mismatch!", TokenType::RBrace);
+		}
+		//默认初始化
+		else
+		{
+			//全部都用数字0初始化
+			for (decltype(N) i = 0; i < N; i++)
+			{
+				vnodes[i] = std::make_shared<ASTNode>();
+				vnodes[i]->tk = { TokenType::Number, double(0) };
+			}
+		}
+	}
+	//是右中括号 数组元素个数右赋值号右侧的大括号中的元素个数决定
+	else
+	{
+		//读取赋值号
+		auto[tknext, res] = expectToken(input, "error(Def array): need a =!", TokenType::Assign);
+		//读取左大括号
+		std::tie(tk, input) = expectToken(res, "error(Def array): need a {!", TokenType::LBrace);
+		do
+		{
+			//获取一个元素的语法节点
+			decltype(parent) child;
+			std::tie(child, input) = createArithmeticASTNode(input);
+			//添加到vector中
+			vnodes.push_back(child);
+			//读取一个token
+			std::tie(tk, input) = parseToken(input);
+		} while (tk.type == TokenType::Comma);
+
+		//如果停下来的时候不是右括号则报错
+		if (tk.type != TokenType::RBrace)
+		{
+			throw std::runtime_error("error(Def array): need a }!\n");
+		}
+	}
+
+	//把定义的数组变量名添加到parent的childs中
+	parent->childs.push_back(node);
+	//把所有读出来的参量添加到parent的childs中
+	for (const auto& vnode : vnodes)
+	{
+		parent->childs.push_back(vnode);
+	}
 	return { parent, input };
 }
 

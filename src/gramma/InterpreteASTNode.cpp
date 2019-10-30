@@ -640,79 +640,82 @@ double interpreteUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	return result;
 }
 
-//解释一元运算节(类似+= -=这种)点的模板
-template<typename OP>
-double interpreteOp1AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op)
+//解释二元算数运算节点的模板
+//SELF -- 标志是否左值自身作为二元运算的左操作数运算后再赋给自己
+//SELF为false的运算有+ - * / ^ % && || < > != ==
+//SELF为true的运算有+= -= *= /=
+//SHORTCUT -- 是否是短路运算
+//SHORTCUT为true的运算有&& ||
+//OP -- 二元运算子 运算类型为(double, double)->double
+//PRED -- 是否成功短路的判断谓词 类型(double)->bool 当SHORTCUT为true时 其余情况没用用通过if constexpr优化掉相关代码
+template<bool SELF, bool SHORTCUT, typename OP, typename PRED>
+double interpreteOp2AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op, PRED pred)
 {
 	double result;
 	auto iter = ast->childs.begin();
-	//引用自加
-	if ((*iter)->tk.type == TokenType::DeRef)
+	//左值自身作为二元运算的左操作数运算后再赋给自己
+	if constexpr (SELF)
 	{
-		//执行左值解引用赋值操作
-		auto astL = *iter;
-		auto astR = *(++iter);
-		//执行解引用(自运算的左值)
-		return interpreteDeRefAST<true, true>(astL, astR, env, op);
-	}
-	else
-	{
-		//获得变量名字
-		auto symbol = std::get<std::string>((*iter)->tk.value);
-		if (auto v = getEnvSymbol(symbol, env))
+		//引用自加
+		if ((*iter)->tk.type == TokenType::DeRef)
 		{
-			if (std::holds_alternative<double>(v.value()))
-			{
-				//计算变量值
-				result = op(std::get<double>(v.value()), interpreteAST(*(++iter), env));
-				//更新变量在环境中的值
-				setEnvSymbol(symbol, result, env);
-			}
-			//变量类型错误
-			else
-			{
-				throw std::runtime_error("error(assignment): the symbol is not variable!\n");
-			}
+			//执行左值解引用赋值操作
+			auto astL = *iter;
+			auto astR = *(++iter);
+			//执行解引用(自运算的左值)
+			return interpreteDeRefAST<true, true>(astL, astR, env, op);
 		}
-		//如果查不到这个变量则报错
 		else
 		{
-			throw std::runtime_error("error(assignment): undefine symbol!\n");
+			//获得变量名字
+			auto symbol = std::get<std::string>((*iter)->tk.value);
+			if (auto v = getEnvSymbol(symbol, env))
+			{
+				if (std::holds_alternative<double>(v.value()))
+				{
+					//计算变量值
+					result = op(std::get<double>(v.value()), interpreteAST(*(++iter), env));
+					//更新变量在环境中的值
+					setEnvSymbol(symbol, result, env);
+				}
+				//变量类型错误
+				else
+				{
+					throw std::runtime_error("error(assignment): the symbol is not variable!\n");
+				}
+			}
+			//如果查不到这个变量则报错
+			else
+			{
+				throw std::runtime_error("error(assignment): undefine symbol!\n");
+			}
 		}
 	}
-
-	return result;
-}
-
-//解释二元运算(类似+ - * /这种)节点的模板
-//shortcut--是否为短路运算
-//当为true时第一次计算的结果需要利用谓词pred判断是否短路
-//当为false时 利用if constexpr在false时不编译的特点 忽略谓词判断那一段代码 这种情况下pred随便传一个数字(比如0)即可
-template<bool shortcut, typename OP, typename PRED>
-double interpreteOp2AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op, PRED pred)
-{
-	auto iter = ast->childs.begin();
-	if (ast->childs.size() == 2)
-	{
-		double val1 = interpreteAST(*iter, env);
-		//是否短路运算
-		if constexpr (shortcut)
-		{
-			if (pred(val1)) return val1;
-		}
-		double val2 = interpreteAST(*(++iter), env);
-		return op(val1, val2);
-	}
+	//普通二元运算
 	else
 	{
-		auto val = interpreteAST(*iter, env);
-		//结果取负
-		if (ast->tk.type == TokenType::Minus)
+		if (ast->childs.size() == 2)
 		{
-			val = -val;
+			double val1 = interpreteAST(*iter, env);
+			//是否短路运算
+			if constexpr (SHORTCUT)
+			{
+				if (pred(val1)) return val1;
+			}
+			double val2 = interpreteAST(*(++iter), env);
+			result = op(val1, val2);
 		}
-		return val;
+		else
+		{
+			result = interpreteAST(*iter, env);
+			//结果取负
+			if (ast->tk.type == TokenType::Minus)
+			{
+				result = -result;
+			}
+		}
 	}
+	return result;
 }
 
 //解释自增自运算(类似++、--这种)节点的模板
@@ -837,24 +840,24 @@ using PENV = Environment*;
 //语法节点解释映射表
 static std::unordered_map<TokenType, std::function<double(PAST, PENV)>> ASTInterpreteTable
 {
-	{ TokenType::Plus, [](PAST ast, PENV env) {return interpreteOp2AST<false>(ast, env, [](double a, double b) { return a + b; }, 0); } },
-	{ TokenType::Minus, [](PAST ast, PENV env) {return interpreteOp2AST<false>(ast, env, [](double a, double b) { return a - b; }, 0); } },
-	{ TokenType::Mul, [](PAST ast, PENV env) {return interpreteOp2AST<false>(ast, env, [](double a, double b) { return a * b; }, 0); } },
-	{ TokenType::Div, [](PAST ast, PENV env) {return interpreteOp2AST<false>(ast, env, astdiv, 0); } },
-	{ TokenType::Pow, [](PAST ast, PENV env) {return interpreteOp2AST<false>(ast, env, astpow, 0); } },
-	{ TokenType::Mod, [](PAST ast, PENV env) {return interpreteOp2AST<false>(ast, env, astmod, 0); } },
-	{ TokenType::Less, [](PAST ast, PENV env) {return interpreteOp2AST<false>(ast, env, [](double a, double b) { return a < b; }, 0); } },
-	{ TokenType::Great, [](PAST ast, PENV env) {return interpreteOp2AST<false>(ast, env, [](double a, double b) { return a > b; }, 0); } },
-	{ TokenType::NotLess, [](PAST ast, PENV env) {return interpreteOp2AST<false>(ast, env, [](double a, double b) { return a >= b; }, 0); } },
-	{ TokenType::NotGreat, [](PAST ast, PENV env) {return interpreteOp2AST<false>(ast, env, [](double a, double b) { return a <= b; }, 0); } },
-	{ TokenType::Equal, [](PAST ast, PENV env) {return interpreteOp2AST<false>(ast, env, [](double a, double b) { return a == b; }, 0); } },
-	{ TokenType::NotEqual, [](PAST ast, PENV env) {return interpreteOp2AST<false>(ast, env, [](double a, double b) { return a != b; }, 0); } },
-	{ TokenType::And, [](PAST ast, PENV env) {return interpreteOp2AST<true>(ast, env, [](double a, double b) { return a && b; }, [](double v) -> bool { return !v; }); } },
-	{ TokenType::Or, [](PAST ast, PENV env) {return interpreteOp2AST<true>(ast, env, [](double a, double b) { return a || b; }, [](double v) -> bool { return v; }); } },
-	{ TokenType::SelfPlus, [](PAST ast, PENV env) {return interpreteOp1AST(ast, env, [](double a, double b) { return a + b; }); } },
-	{ TokenType::SelfMinus, [](PAST ast, PENV env) {return interpreteOp1AST(ast, env, [](double a, double b) { return a - b; }); } },
-	{ TokenType::SelfMul, [](PAST ast, PENV env) {return interpreteOp1AST(ast, env, [](double a, double b) { return a * b; }); } },
-	{ TokenType::SelfDiv, [](PAST ast, PENV env) {return interpreteOp1AST(ast, env, astdiv); } },
+	{ TokenType::Plus, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::plus<double>(), 0); } },
+	{ TokenType::Minus, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::minus<double>(), 0); } },
+	{ TokenType::Mul, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::multiplies<double>(), 0); } },
+	{ TokenType::Div, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, astdiv, 0); } },
+	{ TokenType::Pow, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, astpow, 0); } },
+	{ TokenType::Mod, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, astmod, 0); } },
+	{ TokenType::Less, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::less<double>(), 0); } },
+	{ TokenType::Great, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::greater<double>(), 0); } },
+	{ TokenType::NotLess, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::not_fn(std::less<double>()), 0); } },
+	{ TokenType::NotGreat, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::not_fn(std::greater<double>()), 0); } },
+	{ TokenType::Equal, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::equal_to<double>(), 0); } },
+	{ TokenType::NotEqual, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::not_equal_to<double>(), 0); } },
+	{ TokenType::And, [](PAST ast, PENV env) { return interpreteOp2AST<false, true>(ast, env, std::logical_and<double>(), std::logical_not<double>()); } },
+	{ TokenType::Or, [](PAST ast, PENV env) { return interpreteOp2AST<false, true>(ast, env, std::logical_or<double>(), std::not_fn(std::logical_not<double>())); } },
+	{ TokenType::SelfPlus, [](PAST ast, PENV env) { return interpreteOp2AST<true, false>(ast, env, std::plus<double>(), 0); } },
+	{ TokenType::SelfMinus, [](PAST ast, PENV env) { return interpreteOp2AST<true, false>(ast, env, std::minus<double>(), 0); } },
+	{ TokenType::SelfMul, [](PAST ast, PENV env) { return interpreteOp2AST<true, false>(ast, env, std::multiplies<double>(), 0); } },
+	{ TokenType::SelfDiv, [](PAST ast, PENV env) { return interpreteOp2AST<true, false>(ast, env, astdiv, 0); } },
 	{ TokenType::Increment, [](PAST ast, PENV env) { return interpreteIncrementAST<false>(ast, env, [](double a) { return a + 1; }); } },
 	{ TokenType::PostIncrement, [](PAST ast, PENV env) { return interpreteIncrementAST<true>(ast, env, [](double a) { return a + 1; }); } },
 	{ TokenType::Decrement, [](PAST ast, PENV env) { return interpreteIncrementAST<false>(ast, env, [](double a) { return a - 1; }); } },
