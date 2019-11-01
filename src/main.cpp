@@ -32,14 +32,19 @@ int main(int argc, char* argv[])
 				//函数定义
 				if (ast->tk.type == TokenType::DefProc)
 				{
-					//如果结尾不是;
-					if (res == "")
+					//如果结尾不存在空格或分号以外的字符
+					if (containOnly(res, ' ', ';'))
 					{
-						//第二个子节点是函数的名字
-						auto iter = ast->childs.begin();
-						iter++;
-						std::cout << "proc: " + std::get<std::string>((*iter)->tk.value) << " define complete!" << std::endl;
+						//如果不存在分号(即只存在空格)则输出函数定义完毕的提示
+						if (containOnly(res, ' '))
+						{
+							//第二个子节点是函数的名字
+							auto iter = ast->childs.begin();
+							iter++;
+							std::cout << "proc: " + std::get<std::string>((*iter)->tk.value) << " define complete!" << std::endl;
+						}
 					}
+					//存在不符合语法的字符语法有错
 					else
 					{
 						std::cout << "error(bad syntax)!" << std::endl;
@@ -47,48 +52,63 @@ int main(int argc, char* argv[])
 				}
 				else if (ast->tk.type == TokenType::DefVar)
 				{
-					//如果结尾不是;
-					if (res == "")
+					//如果结尾不存在空格或分号以外的字符
+					if (containOnly(res, ' ', ';'))
 					{
-						//查看变量名
-						auto iter = ast->childs.begin();
-						auto symbol = std::get<std::string>((*iter)->tk.value);
-						std::cout << symbol << " = " << result << std::endl;
+						//如果不存在分号(即只存在空格)则输出该变量的名字和值
+						if (containOnly(res, ' '))
+						{
+							//查看变量名
+							auto iter = ast->childs.begin();
+							auto symbol = std::get<std::string>((*iter)->tk.value);
+							std::cout << symbol << " = " << result << std::endl;
+						}
+					}
+					//存在不符合语法的字符语法有错
+					else
+					{
+						std::cout << "error(bad syntax)!" << std::endl;
 					}
 				}
 				//如果都不是 证明只是单纯的表达式计算 则输出计算结果
 				else if (isnoneof(ast->tk.type, TokenType::If, TokenType::While, TokenType::For, TokenType::Block, TokenType::End))
 				{
-					//如果结尾不是;
-					if (res == "")
+					//如果结尾不存在空格或分号以外的字符
+					if (containOnly(res, ' ', ';'))
 					{
-						//解析第一个字符
-						Token tk;
-						std::tie(tk, res) = parseToken(input);
-						if (tk.type == TokenType::UserSymbol)
+						//如果不存在分号(即只存在空格)
+						//如果是变量赋值则输出变量名 = 数值
+						//否则输出 ans = 数值
+						if (containOnly(res, ' '))
 						{
-							auto symbol = std::get<std::string>(tk.value);
-							if (auto v = getEnvSymbol(symbol, &GlobalEnv))
+							//解析第一个字符
+							Token tk;
+							std::tie(tk, res) = parseToken(input);
+							if (tk.type == TokenType::UserSymbol)
 							{
-								//如果是变量
-								if (std::holds_alternative<double>(v.value()))
+								auto symbol = std::get<std::string>(tk.value);
+								if (auto v = getEnvSymbol(symbol, &GlobalEnv))
 								{
-									std::cout << symbol << " = " << result << std::endl;
-								}
-								//函数调用
-								else
-								{
-									std::cout << "ans = " << result << std::endl;
+									//如果是变量
+									if (std::holds_alternative<double>(v.value()))
+									{
+										std::cout << symbol << " = " << result << std::endl;
+									}
+									//函数调用
+									else
+									{
+										std::cout << "ans = " << result << std::endl;
+									}
 								}
 							}
-						}
-						else
-						{
-							std::cout << "ans = " << result << std::endl;
+							else
+							{
+								std::cout << "ans = " << result << std::endl;
+							}
 						}
 					}
-					//证明存在残渣 即语法有错
-					else if (res != ";")
+					//存在不符合语法的字符语法有错
+					else
 					{
 						std::cout << "error(bad syntax)!" << std::endl;
 					}

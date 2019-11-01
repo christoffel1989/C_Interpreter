@@ -24,3 +24,17 @@ bool isoneof(T t, T arg, Ts... args)
 {
 	return (t == arg) || isoneof(t, args...);
 }
+
+//字符串只包含某几种字符
+template <typename... Ts>
+bool containOnly(std::string str, Ts... ts)
+{
+	for (auto ch : str)
+	{
+		if (isnoneof(ch, ts...))
+		{
+			return false;
+		}
+	}
+	return true;
+}
