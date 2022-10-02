@@ -1,5 +1,5 @@
 #project name
-PROJECT(C_INTERPRETER_GRAMMA)
+PROJECT(GRAMMA)
 
 file(GLOB gramma_header_files src/*.h)
 file(GLOB gramma_source_files src/*.cpp)
