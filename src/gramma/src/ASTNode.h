@@ -7,6 +7,8 @@
 #include <list>
 #include <unordered_map>
 #include <memory>
+#include <variant>
+#include <expected>
 
 //语法树节点
 struct ASTNode
@@ -77,3 +79,55 @@ std::optional<UserAST> getEnvSymbol(VarAddress addr);
 
 //获得制定环境中用户自定义符号的地址
 std::optional<VarAddress> getEnvSymbolAddr(std::string symbol, Environment* env);
+
+
+
+
+//流程状态
+struct ContinueState {};
+struct BreakState {};
+struct ReturnState { double value; };
+struct ErrorState { std::string message; };
+using State = std::variant<ContinueState, BreakState, ReturnState, ErrorState>;
+//单子
+using ASTResult = std::expected<double, State>;
+
+//单子解析宏
+#define TRY_(expr) \
+    if (!(expr)) [[unlikely]] { \
+        return expr; \
+    }
+
+#define TRY(var, expr) \
+    auto&& var##_result = (expr); \
+    if (!var##_result) [[unlikely]] { \
+        if (std::holds_alternative<ReturnState>(var##_result.error())) { return std::get<ReturnState>(var##_result.error()).value; } \
+        return std::unexpected{var##_result.error()}; \
+    } \
+    var = std::move(var##_result).value();
+
+#define TRY_AUTO(var, expr) \
+    auto&& var##_result = (expr); \
+    if (!var##_result) [[unlikely]] { \
+        if (std::holds_alternative<ReturnState>(var##_result.error())) { return std::get<ReturnState>(var##_result.error()).value; } \
+        return std::unexpected{var##_result.error()}; \
+    } \
+    auto var = std::move(var##_result).value();
+
+//单子包装器
+template<typename F>
+concept UnaryBoolFunction = std::regular_invocable<F, double>&& std::same_as<std::invoke_result_t<F, bool>, bool>;
+template<typename F>
+concept UnaryDoubleFunction = std::regular_invocable<F, double>&& std::same_as<std::invoke_result_t<F, double>, double>;
+template<typename F>
+concept BinaryBoolFunction = std::regular_invocable<F, double, double>&& std::same_as<std::invoke_result_t<F, double, double>, bool>;
+template<typename F>
+concept BinaryDoubleFunction = std::regular_invocable<F, double, double>&& std::same_as<std::invoke_result_t<F, double, double>, double>;
+template<UnaryBoolFunction UnaryOp>
+auto ast_wrap(UnaryOp op) { return [op](bool a) -> ASTResult { return ASTResult(op(a)); }; }
+template<UnaryDoubleFunction UnaryOp>
+auto ast_wrap(UnaryOp op) { return [op](double a) -> ASTResult { return ASTResult(op(a)); }; }
+template<BinaryBoolFunction BinaryOp>
+auto ast_wrap(BinaryOp op) { return [op](double a, double b) -> ASTResult { return ASTResult(op(a, b)); }; }
+template<BinaryDoubleFunction BinaryOp>
+auto ast_wrap(BinaryOp op) { return [op](double a, double b) -> ASTResult { return ASTResult(op(a, b)); }; }

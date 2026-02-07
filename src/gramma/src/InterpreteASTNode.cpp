@@ -7,41 +7,41 @@
 #include <functional>
 
 //存在异常可能性的二元运算符号操作的函数
-double astdiv(double a, double b)
+auto astdiv(double a, double b) -> ASTResult
 {
 	//除数不能为0
 	if (b == 0)
 	{
-		throw std::runtime_error("error(bad syntax): divided by zero!\n");
+		return std::unexpected(ErrorState("error(bad syntax): divided by zero!\n"));
 	}
 	return a / b;
 }
-double astpow(double a, double b)
+auto astpow(double a, double b) -> ASTResult
 {
 	//当底为0 幂为非正实数时幂操作无效
 	if (a == 0 && b <= 0)
 	{
-		throw std::runtime_error("error(arithmatic): zero can not be power by non-positive value!\n");
+		return std::unexpected(ErrorState("error(arithmatic): zero can not be power by non-positive value!\n"));
 	}
 	return pow(a, b);
 }
-double astmod(double a, double b)
+auto astmod(double a, double b) -> ASTResult
 {
 	int ia = (int)a;
 	if (ia != a)
 	{
-		throw std::runtime_error("error(arithmatic): non-integral number can not be modded!\n");
+		return std::unexpected(ErrorState("error(arithmatic): non-integral number can not be modded!\n"));
 	}
 	int ib = (int)b;
 	if (ib != b)
 	{
-		throw std::runtime_error("error(arithmatic): non-integral number can not be used to modded!\n");
+		return std::unexpected(ErrorState("error(arithmatic): non-integral number can not be used to modded!\n"));
 	}
 	return ia % ib;
 }
 
 //解释取地址语法节点
-double interpreteRefAST(std::shared_ptr<ASTNode> ast, Environment* env)
+auto interpreteRefAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResult
 {
 	auto node = *(ast->childs.begin());
 	//如果不是子节点不是usersymbol类型则返回(后续还应该继续支持如果子节点是deref的情形)
@@ -58,7 +58,7 @@ double interpreteRefAST(std::shared_ptr<ASTNode> ast, Environment* env)
 		//如果没查询到
 		else
 		{
-			throw std::runtime_error("error(ref): undefine symbol " + symbol + " !\n");
+			return std::unexpected(ErrorState("error(ref): undefine symbol " + symbol + " !\n"));
 		}
 	}
 	//如果是解引用
@@ -72,7 +72,7 @@ double interpreteRefAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	//错误用法
 	else
 	{
-		throw std::runtime_error("error(ref): has no address!\n");
+		return std::unexpected(ErrorState("error(ref): has no address!\n"));
 	}
 }
 
@@ -82,7 +82,7 @@ double interpreteRefAST(std::shared_ptr<ASTNode> ast, Environment* env)
 //当Self为true(且LVal为true)时为自运算需要设置一个二元运算算子op 
 //当Self为false(且LVal为fasle)时为普通赋值 op随便扔一个任意类型变量(例如数字0)即可利用constexpr的特性不会编译
 template <bool LVal, bool Self, typename T, typename OP>
-double auxDeRefAST(double rval, UserAST astval, int iaddr, OP op)
+auto auxDeRefAST(double rval, UserAST astval, int iaddr, OP op) -> ASTResult
 {
 	//如果是右值则先把rval赋值为左侧解引用得到的数值
 	if constexpr (!LVal)
@@ -96,7 +96,7 @@ double auxDeRefAST(double rval, UserAST astval, int iaddr, OP op)
 		//进入到此处时LVal不能是false
 		static_assert(LVal, "self operation need deref be a L-value operation!\n");
 		//计算结果值
-		rval = op(rval, std::get<T>(astval));
+		TRY(rval, op(rval, std::get<T>(astval)));
 	}
 
 	//如果是左值则将求解结果(数值)赋值给地址为iddr处的内存
@@ -114,11 +114,11 @@ double auxDeRefAST(double rval, UserAST astval, int iaddr, OP op)
 //当Self为true(且LVal为true)时为自运算需要设置一个二元运算算子op 
 //当Self为false(且LVal为fasle)时为普通赋值 op随便扔一个任意类型变量(例如数字0)即可利用constexpr的特性不会编译
 template <bool LVal, bool Self, typename OP>
-double interpreteDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode> astR, Environment* env, OP op)
+auto interpreteDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode> astR, Environment* env, OP op) -> ASTResult
 {
 	auto iter = astL->childs.begin();
 	//计算表达式的值
-	auto daddr = interpreteAST(*iter, env);
+	TRY_AUTO(daddr, interpreteAST(*iter, env));
 	//查看是否是非负整数
 	auto iaddr = (int)daddr;
 	//如果result是非负整数
@@ -131,7 +131,7 @@ double interpreteDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode
 			//如果是左值则rval赋值为右侧表达式的计算结果
 			if constexpr (LVal)
 			{
-				rval = interpreteAST(astR, env);
+				TRY(rval, interpreteAST(astR, env))
 			}
 
 			//如果计算结果是double
@@ -147,25 +147,22 @@ double interpreteDeRefAST(std::shared_ptr<ASTNode> astL, std::shared_ptr<ASTNode
 			//如果计算结果是函数
 			else
 			{
-				//抛出异常
-				throw std::runtime_error("error(Deref pointer): function can not be deref!\n");
+				return std::unexpected(ErrorState("error(Deref pointer): function can not be deref!\n"));
 			}
 		}
 		else
 		{
-			//抛出异常
-			throw std::runtime_error("error(Deref pointer): address out of stack top\n");
+			return std::unexpected(ErrorState("error(Deref pointer): address out of stack top\n"));
 		}
 	}
 	else
 	{
-		//抛出异常
-		throw std::runtime_error("error(Deref pointer): address should be non negetive integral value\n");
+		return std::unexpected(ErrorState("error(Deref pointer): address should be non negetive integral value\n"));
 	}
 }
 
 //解释赋值符号语法节点
-double interpreteAssignAST(std::shared_ptr<ASTNode> ast, Environment* env)
+auto interpreteAssignAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResult
 {
 	auto iter = ast->childs.begin();
 	//如果是引用类型
@@ -184,7 +181,7 @@ double interpreteAssignAST(std::shared_ptr<ASTNode> ast, Environment* env)
 		if (auto v = getEnvSymbol(symbol, env))
 		{
 			//计算表达式结果
-			auto result = interpreteAST(*(++iter), env);
+			TRY_AUTO(result, interpreteAST(*(++iter), env))
 			//如果是变量
 			if (std::holds_alternative<double>(v.value()))
 			{
@@ -203,29 +200,26 @@ double interpreteAssignAST(std::shared_ptr<ASTNode> ast, Environment* env)
 				}
 				else
 				{
-					//抛出异常
-					throw std::runtime_error("error(assignment): address should be non negetive integral value!\n");
+					return std::unexpected(ErrorState("error(assignment): address should be non negetive integral value!\n"));
 				}
 			}
 			//变量 理论上不应该到达这个位置
 			else 
 			{
-				//抛出异常
-				throw std::runtime_error("error(assignment):can not assign a function!\n");
+				return std::unexpected(ErrorState("error(assignment):can not assign a function!\n"));
 			}
 
 			return result;
 		}
 		else
 		{
-			//查不到这个变量报错
-			throw std::runtime_error("error(assignment): undefine symbol!\n");
+			return std::unexpected(ErrorState("error(assignment): undefine symbol!\n"));
 		}
 	}
 }
 
 //解释由中括号包起来的语句块
-double interpreteBlockAST(std::shared_ptr<ASTNode> ast, Environment* env)
+auto interpreteBlockAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResult
 {
 	auto& childs = ast->childs;
 	//构造一个调用函数新的环境
@@ -236,13 +230,13 @@ double interpreteBlockAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	for (auto iter = childs.begin(); iter != childs.end(); iter++)
 	{
 		//逐行执行代码(在新环境中)
-		result = interpreteAST(*iter, &subenv);
+		TRY(result, interpreteAST(*iter, &subenv));
 	}
 	return result;
 }
 
 //解释if语法节点
-double interpreteIfAST(std::shared_ptr<ASTNode> ast, Environment* env)
+auto interpreteIfAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResult
 {
 	//构造一个调用函数新的环境
 	Environment subenv;
@@ -252,11 +246,11 @@ double interpreteIfAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	//先计算条件
 	auto iter = ast->childs.begin();
 	double result = 0;
-	double condition = interpreteAST(*iter, &subenv);
+	TRY_AUTO(condition, interpreteAST(*iter, &subenv));
 	if (condition != 0)
 	{
 		//执行if的语句块
-		result = interpreteAST(*(++iter), &subenv);
+		TRY(result, interpreteAST(*(++iter), &subenv));
 	}
 	else
 	{
@@ -265,19 +259,14 @@ double interpreteIfAST(std::shared_ptr<ASTNode> ast, Environment* env)
 		//可能不存再else分支所以要判断一下
 		if (iter != ast->childs.end())
 		{
-			result = interpreteAST(*iter, &subenv);
+			TRY(result, interpreteAST(*iter, &subenv));
 		}
 	}
 	return result;
 }
 
-//continue跳转抛出的异常
-struct ContinueState {};
-//break跳转抛出的异常
-struct BreakState {};
-
 //解释while语法节点
-double interpreteWhileAST(std::shared_ptr<ASTNode> ast, Environment* env)
+auto interpreteWhileAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResult
 {
 	//构造一个调用函数新的环境
 	Environment subenv;
@@ -291,35 +280,46 @@ double interpreteWhileAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	auto body = *(++iter);
 	
 	double result = 0;
-	while (interpreteAST(condition, &subenv) != 0)
+	while (true)
 	{
-		try
-		{
-			//执行循环体
-			result = interpreteAST(body, &subenv);
-		}
-		//continue
-		catch (ContinueState)
-		{
-			continue;
-		}
-		//break
-		catch (BreakState)
+		TRY_AUTO(condition_result, interpreteAST(condition, &subenv));
+		if (condition_result == 0)
 		{
 			break;
 		}
-		//错误代码 继续抛出
-		catch (std::exception& e)
+
+		if (auto body_result = interpreteAST(body, &subenv); body_result.value())
 		{
-			throw e;
+			result = body_result.value();
 		}
+		else
+		{
+			auto&& e = body_result.error();
+			if (std::holds_alternative<ContinueState>(e)) 
+			{
+				continue;
+			}
+			else if (std::holds_alternative<BreakState>(e))
+			{
+				break;
+			}
+			else if (std::holds_alternative<ReturnState>(e))
+			{
+				return std::get<ReturnState>(e).value;
+			}
+			else if (std::holds_alternative<ErrorState>(e))
+			{
+				return std::unexpected(e);
+			}
+		}
+		
 	}
 
 	return result;
 }
 
 //解释do while语法节点
-double interpreteDoWhileAST(std::shared_ptr<ASTNode> ast, Environment* env)
+auto interpreteDoWhileAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResult
 {
 	//构造一个调用函数新的环境
 	Environment subenv;
@@ -333,35 +333,44 @@ double interpreteDoWhileAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	auto condition = *(++iter);
 
 	double result = 0;
-	do
+	while (true)
 	{
-		try
+		if (auto body_result = interpreteAST(body, &subenv); body_result.value())
 		{
-			//执行循环体
-			result = interpreteAST(body, &subenv);
+			result = body_result.value();
 		}
-		//continue
-		catch (ContinueState)
+		else
 		{
-			continue;
+			auto&& e = body_result.error();
+			if (std::holds_alternative<ContinueState>(e))
+			{
+				continue;
+			}
+			else if (std::holds_alternative<BreakState>(e))
+			{
+				break;
+			}
+			else if (std::holds_alternative<ReturnState>(e))
+			{
+				return std::get<ReturnState>(e).value;
+			}
+			else if (std::holds_alternative<ErrorState>(e))
+			{
+				return std::unexpected(e);
+			}
 		}
-		//break
-		catch (BreakState)
+		TRY_AUTO(condition_result, interpreteAST(condition, &subenv));
+		if (condition_result == 0)
 		{
 			break;
 		}
-		//错误代码 继续抛出
-		catch (std::exception& e)
-		{
-			throw e;
-		}
-	} while (interpreteAST(condition, &subenv) != 0);
+	}
 
 	return result;
 }
 
 //解释for语法节点
-double interpreteForAST(std::shared_ptr<ASTNode> ast, Environment* env)
+auto interpreteForAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResult
 {
 	//构造一个调用函数新的环境
 	Environment subenv;
@@ -379,35 +388,46 @@ double interpreteForAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	auto body = *(++iter);
 
 	double result = 0;
-	for (interpreteAST(start, &subenv); interpreteAST(end, &subenv) != 0; interpreteAST(increment, &subenv))
+	TRY_(interpreteAST(start, &subenv));
+	while (true)
 	{
-		try
-		{
-			//执行循环体
-			result = interpreteAST(body, &subenv);
-		}
-		//continue
-		catch (ContinueState)
-		{
-			continue;
-		}
-		//break
-		catch (BreakState)
+		TRY_AUTO(condition_result, interpreteAST(end, &subenv));
+		if (condition_result == 0)
 		{
 			break;
 		}
-		//错误代码 继续抛出
-		catch (std::exception& e)
+		if (auto body_result = interpreteAST(body, &subenv); body_result.value())
 		{
-			throw e;
+			result = body_result.value();
 		}
+		else
+		{
+			auto&& e = body_result.error();
+			if (std::holds_alternative<ContinueState>(e))
+			{
+				continue;
+			}
+			else if (std::holds_alternative<BreakState>(e))
+			{
+				break;
+			}
+			else if (std::holds_alternative<ReturnState>(e))
+			{
+				return std::get<ReturnState>(e).value;
+			}
+			else if (std::holds_alternative<ErrorState>(e))
+			{
+				return std::unexpected(e);
+			}
+		}
+		TRY_(interpreteAST(increment, &subenv));
 	}
 
 	return result;
 }
 
 //解释定义变量语法节点
-double interpreteDefVarAST(std::shared_ptr<ASTNode> ast, Environment* env)
+auto interpreteDefVarAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResult
 {
 	//自定义变量
 	auto iter = ast->childs.begin();
@@ -416,10 +436,10 @@ double interpreteDefVarAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	//如果在当前环境中已经定义则也报错
 	if (getEnvSymbol(symbol, env, true))
 	{
-		throw std::runtime_error("error(Def var): " + symbol + " redefined!\n");
+		return std::unexpected(ErrorState("error(Def var): " + symbol + " redefined!\n"));
 	}
 	//计算变量定义式值
-	auto result = interpreteAST(*(++iter), env);
+	TRY_AUTO(result, interpreteAST(*(++iter), env));
 	//注册变量至环境当中
 	registEnvSymbol(symbol, result, env);
 	
@@ -427,7 +447,7 @@ double interpreteDefVarAST(std::shared_ptr<ASTNode> ast, Environment* env)
 }
 
 //解释定义指针变量语法节点
-double interpreteDefPointerAST(std::shared_ptr<ASTNode> ast, Environment* env)
+auto interpreteDefPointerAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResult
 {
 	//自定义变量
 	auto iter = ast->childs.begin();
@@ -436,10 +456,10 @@ double interpreteDefPointerAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	//如果在当前环境中已经定义则也报错
 	if (getEnvSymbol(symbol, env, true))
 	{
-		throw std::runtime_error("error(Def pointer): " + symbol + " redefined!\n");
+		return std::unexpected(ErrorState("error(Def pointer): " + symbol + " redefined!\n"));
 	}
 	//计算变量定义式值
-	auto daddr = interpreteAST(*(++iter), env);
+	TRY_AUTO(daddr, interpreteAST(*(++iter), env));
 	auto iaddr = (int)daddr;
 	//如果result是非负整数
 	if (iaddr >= 0 && iaddr == daddr)
@@ -449,15 +469,14 @@ double interpreteDefPointerAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	}
 	else
 	{
-		//抛出异常
-		throw std::runtime_error("error(Def pointer): address should be non negetive integral value!\n");
+		return std::unexpected(ErrorState("error(Def pointer): address should be non negetive integral value!\n"));
 	}
 
 	return daddr;
 }
 
 //解释定义数组变量的语法节点
-double interpreteDefArrayAST(std::shared_ptr<ASTNode> ast, Environment* env)
+auto interpreteDefArrayAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResult
 {
 	//自定义变量
 	auto iter = ast->childs.begin();
@@ -466,7 +485,7 @@ double interpreteDefArrayAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	//如果在当前环境中已经定义则也报错
 	if (getEnvSymbol(symbol, env, true))
 	{
-		throw std::runtime_error("error(Def array): " + symbol + " redefined!\n");
+		return std::unexpected(ErrorState("error(Def array): " + symbol + " redefined!\n"));
 	}
 	//获取数组元素个数
 	auto N = ast->childs.size() - 1;
@@ -474,7 +493,8 @@ double interpreteDefArrayAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	//计算每一个初始化元素的值
 	for (decltype(N) i = 0; i < N; i++)
 	{
-		values[i] = double(interpreteAST(*(++iter), env));
+		TRY_AUTO(value, interpreteAST(*(++iter), env));
+		values[i] = value;
 	}
 	//注册变量
 	registEnvSymbol(symbol, values, env);
@@ -484,7 +504,7 @@ double interpreteDefArrayAST(std::shared_ptr<ASTNode> ast, Environment* env)
 }
 
 //解释定义函数语法节点
-double interpreteDefProcAST(std::shared_ptr<ASTNode> ast, Environment* env)
+auto interpreteDefProcAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResult
 {
 	auto& childs = ast->childs;
 	auto iter = childs.begin();
@@ -496,7 +516,7 @@ double interpreteDefProcAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	//如果在当前环境中已经定义则也报错
 	if (getEnvSymbol(symbol, env, true))
 	{
-		throw std::runtime_error("error(Def proc): " + symbol + " redefined!\n");
+		return std::unexpected(ErrorState("error(Def proc): " + symbol + " redefined!\n"));
 	}
 	//获得各个参数的名字
 	std::list<std::string> args;
@@ -513,7 +533,7 @@ double interpreteDefProcAST(std::shared_ptr<ASTNode> ast, Environment* env)
 }
 
 //解释系统自定义符号语法节点
-double interpretePrimitiveSymboAST(std::shared_ptr<ASTNode> ast, Environment* env)
+auto interpretePrimitiveSymboAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResult
 {
 	auto tk = ast->tk;
 	auto& childs = ast->childs;
@@ -527,7 +547,7 @@ double interpretePrimitiveSymboAST(std::shared_ptr<ASTNode> ast, Environment* en
 		//获得函数体
 		auto fun = std::get<std::function<double(double)>>(primitive);
 		//获得函数输入参数 只有单输入参数
-		auto arg = interpreteAST(*childs.begin(), env);
+		TRY_AUTO(arg, interpreteAST(*childs.begin(), env));
 		//执行函数
 		result = fun(arg);
 	}
@@ -541,7 +561,7 @@ double interpretePrimitiveSymboAST(std::shared_ptr<ASTNode> ast, Environment* en
 }
 
 //解释用户自定义符号语法节点
-double interpreteUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
+auto interpreteUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResult
 {
 	auto tk = ast->tk;
 	auto& childs = ast->childs;
@@ -576,8 +596,7 @@ double interpreteUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 			//如果形参和实参数量不匹配则报错
 			if (paras.size() != childs.size())
 			{
-				//报一个错误
-				throw std::runtime_error("error(bad syntax): mismatch argument counts for function call!\n");
+				return std::unexpected(ErrorState("error(bad syntax): mismatch argument counts for function call!\n"));
 			}
 
 			//求各个函数输入参数的值
@@ -599,7 +618,7 @@ double interpreteUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 				else if (node->tk.type == TokenType::Ref)
 				{
 					//求解值
-					result = interpreteAST(*iterast, env);
+					TRY(result, interpreteAST(*iterast, env));
 					//注册第i个实参至subenv中
 					registEnvSymbol(*iterpara, VarAddress(result), &subenv);
 				}
@@ -607,7 +626,7 @@ double interpreteUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 				else
 				{
 					//求解值
-					result = interpreteAST(*iterast, env);
+					TRY(result, interpreteAST(*iterast, env));
 					//注册第i个实参至subenv中
 					registEnvSymbol(*iterpara, result, &subenv);
 				}
@@ -615,26 +634,12 @@ double interpreteUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 				iterast++;
 			}
 			//执行body函数(在subenv下)
-			try
-			{
-				result = interpreteAST(body, &subenv);
-			}
-			//返回值
-			catch (double d)
-			{
-				result = d;
-			}
-			//错误代码 继续抛出
-			catch (std::exception& e)
-			{
-				throw e;
-			}
+			TRY(result, interpreteAST(body, &subenv));
 		}
 	}
 	else
 	{
-		//抛出异常
-		throw std::runtime_error("error(bad syntax): undefine symbol!\n");
+		return std::unexpected(ErrorState("error(bad syntax): undefine symbol!\n"));
 	}
 
 	return result;
@@ -649,7 +654,7 @@ double interpreteUserSymbolAST(std::shared_ptr<ASTNode> ast, Environment* env)
 //OP -- 二元运算子 运算类型为(double, double)->double
 //PRED -- 是否成功短路的判断谓词 类型(double)->bool 当SHORTCUT为true时 其余情况没用用通过if constexpr优化掉相关代码
 template<bool SELF, bool SHORTCUT, typename OP, typename PRED>
-double interpreteOp2AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op, PRED pred)
+auto interpreteOp2AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op, PRED pred) -> ASTResult
 {
 	double result;
 	auto iter = ast->childs.begin();
@@ -674,20 +679,21 @@ double interpreteOp2AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op, P
 				if (std::holds_alternative<double>(v.value()))
 				{
 					//计算变量值
-					result = op(std::get<double>(v.value()), interpreteAST(*(++iter), env));
+					TRY_AUTO(arg, interpreteAST(*(++iter), env));
+					TRY(result, op(std::get<double>(v.value()), arg));
 					//更新变量在环境中的值
 					setEnvSymbol(symbol, result, env);
 				}
 				//变量类型错误
 				else
 				{
-					throw std::runtime_error("error(assignment): the symbol is not variable!\n");
+					return std::unexpected(ErrorState("error(assignment): the symbol is not variable!\n"));
 				}
 			}
 			//如果查不到这个变量则报错
 			else
 			{
-				throw std::runtime_error("error(assignment): undefine symbol!\n");
+				return std::unexpected(ErrorState("error(assignment): undefine symbol!\n"));
 			}
 		}
 	}
@@ -696,18 +702,18 @@ double interpreteOp2AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op, P
 	{
 		if (ast->childs.size() == 2)
 		{
-			double val1 = interpreteAST(*iter, env);
+			TRY_AUTO(val1, interpreteAST(*iter, env));
 			//是否短路运算
 			if constexpr (SHORTCUT)
 			{
 				if (pred(val1)) return val1;
 			}
-			double val2 = interpreteAST(*(++iter), env);
-			result = op(val1, val2);
+			TRY_AUTO(val2, interpreteAST(*(++iter), env));
+			TRY(result, op(val1, val2));
 		}
 		else
 		{
-			result = interpreteAST(*iter, env);
+			TRY(result, interpreteAST(*iter, env));
 			//结果取负
 			if (ast->tk.type == TokenType::Minus)
 			{
@@ -720,7 +726,7 @@ double interpreteOp2AST(std::shared_ptr<ASTNode> ast, Environment* env, OP op, P
 
 //解释自增自运算(类似++、--这种)节点的模板
 template<bool post, typename OP>
-double interpreteIncrementAST(std::shared_ptr<ASTNode> ast, Environment* env, OP op)
+auto interpreteIncrementAST(std::shared_ptr<ASTNode> ast, Environment* env, OP op) -> ASTResult
 {
 	double prev, after;
 
@@ -755,13 +761,13 @@ double interpreteIncrementAST(std::shared_ptr<ASTNode> ast, Environment* env, OP
 			//变量类型错误
 			else
 			{
-				throw std::runtime_error("error(++ or --): operation is only supported for variable, pointer and deref expression!\n");
+				return std::unexpected(ErrorState("error(++ or --): operation is only supported for variable, pointer and deref expression!\n"));
 			}
 		}
 		//如果查不到这个变量则报错
 		else
 		{
-			throw std::runtime_error("error(++ or --): operation is only supported for variable, pointer and deref expression!\n");
+			return std::unexpected(ErrorState("error(++ or --): operation is only supported for variable, pointer and deref expression!\n"));
 		}
 	}
 	//解引用
@@ -770,7 +776,7 @@ double interpreteIncrementAST(std::shared_ptr<ASTNode> ast, Environment* env, OP
 		//获得地址表达式节点
 		node = *(node->childs.begin());
 		//计算表达式的值(地址)
-		auto daddr = interpreteAST(node, env);
+		TRY_AUTO(daddr, interpreteAST(node, env));
 		//查看是否是非负整数
 		auto iaddr = (int)daddr;
 		//如果daddr是非负整数
@@ -800,27 +806,24 @@ double interpreteIncrementAST(std::shared_ptr<ASTNode> ast, Environment* env, OP
 				//如果计算结果是函数
 				else
 				{
-					//抛出异常
-					throw std::runtime_error("error(Deref pointer): function can not be deref!\n");
+					return std::unexpected(ErrorState("error(Deref pointer): function can not be deref!\n"));
 				}
 			}
 			else
 			{
-				//抛出异常
-				throw std::runtime_error("error(Deref pointer): address out of stack top\n");
+				return std::unexpected(ErrorState("error(Deref pointer): address out of stack top\n"));
 			}
 		}
 		else
 		{
-			//抛出异常
-			throw std::runtime_error("error(Deref pointer): address should be non negetive integral value\n");
+			return std::unexpected(ErrorState("error(Deref pointer): address should be non negetive integral value\n"));
 		}
 
 	}
 	//错误情形
 	else
 	{
-		throw std::runtime_error("error(++ or --): operation is only supported for variable, pointer and deref expression!\n");
+		return std::unexpected(ErrorState("error(++ or --): operation is only supported for variable, pointer and deref expression!\n"));
 	}
 
 	//根据post的是true还是false确定是返回自加之前还是自加之后的值
@@ -838,31 +841,31 @@ double interpreteIncrementAST(std::shared_ptr<ASTNode> ast, Environment* env, OP
 using PAST = std::shared_ptr<ASTNode>;
 using PENV = Environment*;
 //语法节点解释映射表
-static std::unordered_map<TokenType, std::function<double(PAST, PENV)>> ASTInterpreteTable
+static std::unordered_map<TokenType, std::function<ASTResult(PAST, PENV)>> ASTInterpreteTable
 {
-	{ TokenType::Plus, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::plus<double>(), 0); } },
-	{ TokenType::Minus, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::minus<double>(), 0); } },
-	{ TokenType::Mul, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::multiplies<double>(), 0); } },
+	{ TokenType::Plus, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, ast_wrap(std::plus<double>()), 0); }},
+	{ TokenType::Minus, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, ast_wrap(std::minus<double>()), 0); } },
+	{ TokenType::Mul, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, ast_wrap(std::multiplies<double>()), 0); } },
 	{ TokenType::Div, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, astdiv, 0); } },
 	{ TokenType::Pow, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, astpow, 0); } },
 	{ TokenType::Mod, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, astmod, 0); } },
-	{ TokenType::Less, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::less<double>(), 0); } },
-	{ TokenType::Great, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::greater<double>(), 0); } },
-	{ TokenType::NotLess, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::not_fn(std::less<double>()), 0); } },
-	{ TokenType::NotGreat, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::not_fn(std::greater<double>()), 0); } },
-	{ TokenType::Equal, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::equal_to<double>(), 0); } },
-	{ TokenType::NotEqual, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, std::not_equal_to<double>(), 0); } },
-	{ TokenType::And, [](PAST ast, PENV env) { return interpreteOp2AST<false, true>(ast, env, std::logical_and<double>(), std::logical_not<double>()); } },
-	{ TokenType::Or, [](PAST ast, PENV env) { return interpreteOp2AST<false, true>(ast, env, std::logical_or<double>(), std::not_fn(std::logical_not<double>())); } },
-	{ TokenType::SelfPlus, [](PAST ast, PENV env) { return interpreteOp2AST<true, false>(ast, env, std::plus<double>(), 0); } },
-	{ TokenType::SelfMinus, [](PAST ast, PENV env) { return interpreteOp2AST<true, false>(ast, env, std::minus<double>(), 0); } },
-	{ TokenType::SelfMul, [](PAST ast, PENV env) { return interpreteOp2AST<true, false>(ast, env, std::multiplies<double>(), 0); } },
+	{ TokenType::Less, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, ast_wrap(std::less<double>()), 0); } },
+	{ TokenType::Great, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, ast_wrap(std::greater<double>()), 0); } },
+	{ TokenType::NotLess, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, ast_wrap(std::not_fn(std::less<double>())), 0); } },
+	{ TokenType::NotGreat, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, ast_wrap(std::not_fn(std::greater<double>())), 0); } },
+	{ TokenType::Equal, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, ast_wrap(std::equal_to<double>()), 0); } },
+	{ TokenType::NotEqual, [](PAST ast, PENV env) { return interpreteOp2AST<false, false>(ast, env, ast_wrap(std::not_equal_to<double>()), 0); } },
+	{ TokenType::And, [](PAST ast, PENV env) { return interpreteOp2AST<false, true>(ast, env, ast_wrap(std::logical_and<double>()), ast_wrap(std::logical_not<double>())); } },
+	{ TokenType::Or, [](PAST ast, PENV env) { return interpreteOp2AST<false, true>(ast, env, ast_wrap(std::logical_or<double>()), ast_wrap(std::not_fn(std::logical_not<double>()))); } },
+	{ TokenType::SelfPlus, [](PAST ast, PENV env) { return interpreteOp2AST<true, false>(ast, env, ast_wrap(std::plus<double>()), 0); } },
+	{ TokenType::SelfMinus, [](PAST ast, PENV env) { return interpreteOp2AST<true, false>(ast, env, ast_wrap(std::minus<double>()), 0); } },
+	{ TokenType::SelfMul, [](PAST ast, PENV env) { return interpreteOp2AST<true, false>(ast, env, ast_wrap(std::multiplies<double>()), 0); } },
 	{ TokenType::SelfDiv, [](PAST ast, PENV env) { return interpreteOp2AST<true, false>(ast, env, astdiv, 0); } },
 	{ TokenType::Increment, [](PAST ast, PENV env) { return interpreteIncrementAST<false>(ast, env, [](double a) { return a + 1; }); } },
 	{ TokenType::PostIncrement, [](PAST ast, PENV env) { return interpreteIncrementAST<true>(ast, env, [](double a) { return a + 1; }); } },
 	{ TokenType::Decrement, [](PAST ast, PENV env) { return interpreteIncrementAST<false>(ast, env, [](double a) { return a - 1; }); } },
 	{ TokenType::PostDecrement, [](PAST ast, PENV env) { return interpreteIncrementAST<true>(ast, env, [](double a) { return a - 1; }); } },
-	{ TokenType::Not, [](PAST ast, PENV env) { return !interpreteAST(*(ast->childs.begin()), env); } },
+	{ TokenType::Not, [](PAST ast, PENV env) -> ASTResult { TRY_AUTO(logical_result, interpreteAST(*(ast->childs.begin()), env)); return logical_result != 0;  } },
 	{ TokenType::Ref, interpreteRefAST },
 	{ TokenType::DeRef,[](PAST ast, PENV env) { return interpreteDeRefAST<false, false>(ast, nullptr, env, 0); } },
 	{ TokenType::Assign, interpreteAssignAST },
@@ -878,24 +881,24 @@ static std::unordered_map<TokenType, std::function<double(PAST, PENV)>> ASTInter
 	{ TokenType::Number, [](PAST ast, PENV env) { return std::get<double>(ast->tk.value); } },
 	{ TokenType::PrimitiveSymbol, interpretePrimitiveSymboAST },
 	{ TokenType::UserSymbol, interpreteUserSymbolAST },
-	{ TokenType::Break, [](PAST, PENV) -> double { throw BreakState(); } },
-	{ TokenType::Continue, [](PAST, PENV) -> double { throw ContinueState(); } },
-	{ TokenType::Return, [](PAST ast, PENV env) -> double { throw interpreteAST(*(ast->childs.begin()), env); } },
-	{ TokenType::End, [](PAST, PENV) { return 0; } },
+	{ TokenType::Break, [](PAST, PENV) -> ASTResult {  return std::unexpected(BreakState()); } },
+	{ TokenType::Continue, [](PAST, PENV) -> ASTResult { return std::unexpected(ContinueState()); } },
+	{ TokenType::Return, [](PAST ast, PENV env) -> ASTResult { TRY_AUTO(result, interpreteAST(*(ast->childs.begin()), env)); return std::unexpected(ReturnState(result)); }},
+	{ TokenType::End, [](PAST, PENV) -> ASTResult { return 0; } },
 };
 
 //解释语法节点(总入口)
-double interpreteAST(std::shared_ptr<ASTNode> ast, Environment* env)
+auto interpreteAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResult
 {
 	double result;
 	//根据驱动表执行执行对应的函数
 	if (auto iter = ASTInterpreteTable.find(ast->tk.type); iter != ASTInterpreteTable.end())
 	{
-		result = iter->second(ast, env);
+		TRY(result, iter->second(ast, env));
 	}
 	else
 	{
-		throw std::runtime_error("error(bad syntax):\n");
+		return std::unexpected(ErrorState("error(bad syntax):\n"));
 	}
 	return abs(result) < 1e-10 ? 0 : result;
 }

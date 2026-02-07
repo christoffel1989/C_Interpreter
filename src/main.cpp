@@ -22,12 +22,11 @@ int main(int argc, char* argv[])
 
 		if (!input.empty())
 		{
-			try
+			//输入->语法树
+			auto [ast, res] = createStatementASTNode(input);
+			//语法数->输出
+			if (auto result = interpreteAST(ast, &GlobalEnv))
 			{
-				//输入->语法树
-				auto[ast, res] = createStatementASTNode(input);
-				//语法数->输出
-				auto result = interpreteAST(ast, &GlobalEnv);
 				//根据语法树根节点的属性输出相应的信息
 				//函数定义
 				if (ast->tk.type == TokenType::DefProc)
@@ -61,7 +60,7 @@ int main(int argc, char* argv[])
 							//查看变量名
 							auto iter = ast->childs.begin();
 							auto symbol = std::get<std::string>((*iter)->tk.value);
-							std::cout << symbol << " = " << result << std::endl;
+							std::cout << symbol << " = " << result.value() << std::endl;
 						}
 					}
 					//存在不符合语法的字符语法有错
@@ -92,18 +91,18 @@ int main(int argc, char* argv[])
 									//如果是变量
 									if (std::holds_alternative<double>(v.value()))
 									{
-										std::cout << symbol << " = " << result << std::endl;
+										std::cout << symbol << " = " << result.value() << std::endl;
 									}
 									//函数调用
 									else
 									{
-										std::cout << "ans = " << result << std::endl;
+										std::cout << "ans = " << result.value() << std::endl;
 									}
 								}
 							}
 							else
 							{
-								std::cout << "ans = " << result << std::endl;
+								std::cout << "ans = " << result.value() << std::endl;
 							}
 						}
 					}
@@ -114,9 +113,9 @@ int main(int argc, char* argv[])
 					}
 				}
 			}
-			catch (std::exception& e)
+			else if (std::holds_alternative<ErrorState>(result.error()))
 			{
-				std::cout << e.what();
+				std::cout << std::get<ErrorState>(result.error()).message;
 			}
 		}
 	}
