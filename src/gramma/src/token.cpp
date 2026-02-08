@@ -7,10 +7,10 @@
 #include <stdexcept>
 
 //原始映射表
-static std::unordered_map<std::string, std::variant<double, std::function<double(double)>>> PrimitiveTable;
+static std::unordered_map<std::string, std::variant<double, std::function<std::expected<double, std::string>(double)>>> PrimitiveTable;
 //初始化原始符号表
 bool initPrimitiveTable();
-void registPrimitiveSymbol(std::string symbol, std::variant<double, std::function<double(double)>> value);
+void registPrimitiveSymbol(std::string symbol, std::variant<double, std::function<std::expected<double, std::string>(double)>> value);
 //利用静态变量的性质在程序启动时立刻初始化原始符号表
 static bool init = initPrimitiveTable();
 bool initPrimitiveTable()
@@ -27,51 +27,51 @@ bool initPrimitiveTable()
 	registPrimitiveSymbol("atan", [](double val) { return atan(val); });
 	registPrimitiveSymbol("exp", [](double val) { return exp(val); });
 	//可能存在异常
-	registPrimitiveSymbol("asin", [](double val)
+	registPrimitiveSymbol("asin", [](double val) -> std::expected<double, std::string>
 	{
 		if (val < -1 || val > 1)
 		{
-			throw std::runtime_error("error(function call): out of asin's domain!\n");
+			return std::unexpected("error(function call): out of asin's domain!\n");
 		}
 		return asin(val);
 	});
-	registPrimitiveSymbol("acos", [](double val)
+	registPrimitiveSymbol("acos", [](double val) -> std::expected<double, std::string>
 	{
 		if (val < -1 || val > 1)
 		{
-			throw std::runtime_error("error(function call): out of acos's domain!\n");
+			return std::unexpected("error(function call): out of acos's domain!\n");
 		}
 		return acos(val);
 	});
-	registPrimitiveSymbol("ln", [](double val)
+	registPrimitiveSymbol("ln", [](double val) -> std::expected<double, std::string>
 	{
 		if (val <= 0)
 		{
-			throw std::runtime_error("error(function call): out of ln's domain!\n");
+			return std::unexpected("error(function call): out of ln's domain!\n");
 		}
 		return log(val);
 	});
-	registPrimitiveSymbol("log", [](double val)
+	registPrimitiveSymbol("log", [](double val) -> std::expected<double, std::string>
 	{
 		if (val <= 0)
 		{
-			throw std::runtime_error("error(function call): out of log's domain!\n");
+			return std::unexpected("error(function call): out of log's domain!\n");
 		}
 		return log10(val);
 	});
-	registPrimitiveSymbol("sqrt", [](double val)
+	registPrimitiveSymbol("sqrt", [](double val) -> std::expected<double, std::string>
 	{
 		if (val < 0)
 		{
-			throw std::runtime_error("error(function call): out of sqrt's domain!\n");
+			return std::unexpected("error(function call): out of sqrt's domain!\n");
 		}
 		return sqrt(val);
 	});
-	registPrimitiveSymbol("inv", [](double val)
+	registPrimitiveSymbol("inv", [](double val) -> std::expected<double, std::string>
 	{
 		if (val == 0)
 		{
-			throw std::runtime_error("error(function call): can not inverse zero!\n");
+			return std::unexpected("error(function call): can not inverse zero!\n");
 		}
 		return 1 / val;
 	});
@@ -369,12 +369,12 @@ auto parseToken(std::string input) -> std::expected<std::tuple<Token, std::strin
 	return std::make_tuple(tk, input);
 }
 
-void registPrimitiveSymbol(std::string symbol, std::variant<double, std::function<double(double)>> value)
+void registPrimitiveSymbol(std::string symbol, std::variant<double, std::function<std::expected<double, std::string>(double)>> value)
 {
 	PrimitiveTable[symbol] = value;
 }
 
-std::optional<std::variant<double, std::function<double(double)>>> getPrimitiveSymbol(std::string symbol)
+auto getPrimitiveSymbol(std::string symbol) -> std::optional<std::variant<double, std::function<std::expected<double, std::string>(double)>>>
 {
 	//查找
 	auto iter = PrimitiveTable.find(symbol);

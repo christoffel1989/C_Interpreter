@@ -116,4 +116,4 @@ struct Token
 auto parseToken(std::string input) -> std::expected<std::tuple<Token, std::string>, std::string>;
 
 //获得原生定义的符号
-std::optional<std::variant<double, std::function<double(double)>>> getPrimitiveSymbol(std::string symbol);
+auto getPrimitiveSymbol(std::string symbol) -> std::optional<std::variant<double, std::function<std::expected<double, std::string>(double)>>>;

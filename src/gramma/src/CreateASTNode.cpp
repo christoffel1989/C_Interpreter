@@ -179,7 +179,7 @@ auto createFactorASTNode(std::string input) -> std::expected<std::tuple<std::sha
 		auto symbol = std::get<std::string>(tk.value);
 		auto primitive = getPrimitiveSymbol(symbol).value();
 		//如果是1元函数
-		if (std::holds_alternative<std::function<double(double)>>(primitive))
+		if (std::holds_alternative<std::function<std::expected<double, std::string>(double)>>(primitive))
 		{
 			//读取左小括号
 			TRY_PARSE(tk, input, expectToken(input, "error(bad syntax): function call miss a (!", TokenType::Lp));

@@ -542,14 +542,21 @@ auto interpretePrimitiveSymboAST(std::shared_ptr<ASTNode> ast, Environment* env)
 	auto symbol = std::get<std::string>(tk.value);
 	auto primitive = getPrimitiveSymbol(symbol).value();
 	//函数
-	if (std::holds_alternative<std::function<double(double)>>(primitive))
+	if (std::holds_alternative<std::function<std::expected<double, std::string>(double)>>(primitive))
 	{
 		//获得函数体
-		auto fun = std::get<std::function<double(double)>>(primitive);
+		auto fun = std::get<std::function<std::expected<double, std::string>(double)>>(primitive);
 		//获得函数输入参数 只有单输入参数
 		TRY_AUTO(arg, interpreteAST(*childs.begin(), env));
 		//执行函数
-		result = fun(arg);
+		if (auto v = fun(arg))
+		{
+			result = v.value();
+		}
+		else
+		{
+			return std::unexpected(ErrorState{ v.error() });
+		}
 	}
 	//常量
 	else
