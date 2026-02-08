@@ -5,6 +5,12 @@
 #include <variant>
 #include <optional>
 #include <functional>
+#include <expected>
+
+//单子解析宏
+#define TRY_PARSE(para1, para2, expr) if (auto result = expr) std::tie(para1, para2) = result.value(); else return std::unexpected(result.error());
+#define TRY_PARSE_AUTO(para1, para2, expr) auto _______result = expr; if (!_______result.has_value()) return std::unexpected(_______result.error()); auto[para1, para2] = _______result.value();
+#define TRY_PARSE_IGNORE(para, expr) if (auto result = expr) std::tie(std::ignore, para) = result.value(); else return std::unexpected(result.error());
 
 //token类型
 enum class TokenType
@@ -107,7 +113,7 @@ struct Token
 };
 
 //词法解析
-std::tuple<Token, std::string> parseToken(std::string input);
+auto parseToken(std::string input) -> std::expected<std::tuple<Token, std::string>, std::string>;
 
 //获得原生定义的符号
 std::optional<std::variant<double, std::function<double(double)>>> getPrimitiveSymbol(std::string symbol);

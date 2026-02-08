@@ -138,11 +138,11 @@ static std::unordered_map<std::string, TokenType> KeywordTable =
 };
 
 //从字符串中解析出第一个数值
-std::tuple<double, std::string> parseNum(std::string input);
+auto parseNum(std::string input) -> std::expected<std::tuple<double, std::string>, std::string>;
 //从字符串中解析出第一个英文单词
-std::tuple<std::string, std::string> parseSymbol(std::string input);
+auto parseSymbol(std::string input) -> std::tuple<std::string, std::string>;
 
-std::tuple<double, std::string> parseNum(std::string input)
+auto parseNum(std::string input) -> std::expected<std::tuple<double, std::string>, std::string>
 {
 	double result = 0;
 	auto iter = input.begin();
@@ -189,8 +189,7 @@ std::tuple<double, std::string> parseNum(std::string input)
 		//说明小数点后第一个字符不是数字 说明输入有问题
 		if (divisor == 10)
 		{
-			//抛出异常
-			throw std::runtime_error("error(bad syntax): illegal format of input number!\n");
+			return std::unexpected("error(bad syntax): illegal format of input number!\n");
 		}
 	}
 	//如果退出循环后第一个e或者E则继续提取指数的部分
@@ -237,10 +236,10 @@ std::tuple<double, std::string> parseNum(std::string input)
 	//切掉input的[begin,iter)的字符
 	input.erase(input.begin(), iter);
 
-	return { result, input };
+	return std::make_tuple(result, input);
 }
 
-std::tuple<std::string, std::string> parseSymbol(std::string input)
+auto parseSymbol(std::string input) -> std::tuple<std::string, std::string>
 {
 	//根据调用关系 能确保这个程序的输入一定是字母或者下划线
 	auto iter = input.begin();
@@ -268,7 +267,7 @@ std::tuple<std::string, std::string> parseSymbol(std::string input)
 	return { name, input };
 }
 
-std::tuple<Token, std::string> parseToken(std::string input)
+auto parseToken(std::string input) -> std::expected<std::tuple<Token, std::string>, std::string>
 {
 	char ch;
 	Token tk;
@@ -292,7 +291,7 @@ std::tuple<Token, std::string> parseToken(std::string input)
 	if (iter == input.end())
 	{
 		tk.type = TokenType::Empty;
-		return { tk, "" };
+		return std::make_tuple(tk, "");
 	}
 
 	//裁剪input区间在[begin, iter)范围内的字符(不是空格就是换行)
@@ -337,7 +336,7 @@ std::tuple<Token, std::string> parseToken(std::string input)
 	else if (ch >= '0' && ch <= '9')
 	{
 		//执行解析字符串开头数字的函数
-		std::tie(tk.value, input) = parseNum(input);
+		TRY_PARSE(tk.value, input, parseNum(input));
 		tk.type = TokenType::Number;
 	}
 	//字母或者下划线的情况
@@ -367,7 +366,7 @@ std::tuple<Token, std::string> parseToken(std::string input)
 		//坏类型
 		tk.type = TokenType::BadType;
 	}
-	return { tk, input };
+	return std::make_tuple(tk, input);
 }
 
 void registPrimitiveSymbol(std::string symbol, std::variant<double, std::function<double(double)>> value)

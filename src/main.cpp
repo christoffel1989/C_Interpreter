@@ -83,28 +83,35 @@ int main(int argc, char* argv[])
 							if (containOnly(res, ' '))
 							{
 								//解析第一个字符
-								Token tk;
-								std::tie(tk, res) = parseToken(input);
-								if (tk.type == TokenType::UserSymbol)
+								if (auto v = parseToken(input); v.has_value())
 								{
-									auto symbol = std::get<std::string>(tk.value);
-									if (auto v = getEnvSymbol(symbol, &GlobalEnv))
+									Token tk;
+									std::tie(tk, res) = v.value();
+									if (tk.type == TokenType::UserSymbol)
 									{
-										//如果是变量
-										if (std::holds_alternative<double>(v.value()))
+										auto symbol = std::get<std::string>(tk.value);
+										if (auto v = getEnvSymbol(symbol, &GlobalEnv))
 										{
-											std::cout << symbol << " = " << result.value() << std::endl;
+											//如果是变量
+											if (std::holds_alternative<double>(v.value()))
+											{
+												std::cout << symbol << " = " << result.value() << std::endl;
+											}
+											//函数调用
+											else
+											{
+												std::cout << "ans = " << result.value() << std::endl;
+											}
 										}
-										//函数调用
-										else
-										{
-											std::cout << "ans = " << result.value() << std::endl;
-										}
+									}
+									else
+									{
+										std::cout << "ans = " << result.value() << std::endl;
 									}
 								}
 								else
 								{
-									std::cout << "ans = " << result.value() << std::endl;
+									std::cout << v.error();
 								}
 							}
 						}

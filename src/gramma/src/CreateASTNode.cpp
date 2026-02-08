@@ -11,12 +11,19 @@ using TkResult = std::tuple<Token, std::string>;
 template <typename... TS>
 inline auto expectToken(std::string input, std::string error, TS... expects) -> std::expected<std::tuple<Token, std::string>, std::string>
 {
-	auto pack = parseToken(std::move(input));
-	if (isnoneof(std::get<0>(pack).type, expects...))
+	if (auto result = parseToken(std::move(input)); result.has_value())
 	{
-		return std::unexpected(error + "\n");
+		auto pack = result.value();
+		if (isnoneof(std::get<0>(pack).type, expects...))
+		{
+			return std::unexpected(error + "\n");
+		}
+		return pack;
 	}
-	return pack;
+	else
+	{
+		return std::unexpected(result.error());
+	}
 }
 
 //创建空语句的语法树节点
@@ -90,7 +97,7 @@ auto createFactorASTNode(std::string input) -> std::expected<std::tuple<std::sha
 
 	//获得当前第一个token
 	Token tk;
-	tie(tk, input) = parseToken(input);
+	TRY_PARSE(tk, input, parseToken(input));
 
 	//根据token的类型区别进行不同情况的处理
 	//数字、+、-、++、--、!或者&变量求地址
@@ -131,7 +138,7 @@ auto createFactorASTNode(std::string input) -> std::expected<std::tuple<std::sha
 
 		//再读一个token如果是++或者--
 		std::string res;
-		std::tie(tk, res) = parseToken(input);
+		TRY_PARSE(tk, res, parseToken(input));
 		if (isoneof(tk.type, TokenType::PlusPlus, TokenType::MinusMinus))
 		{
 			//把parent节点添加后缀操作
@@ -151,7 +158,7 @@ auto createFactorASTNode(std::string input) -> std::expected<std::tuple<std::sha
 
 		//再读一个token如果是++或者--
 		std::string res;
-		std::tie(tk, res) = parseToken(input);
+		TRY_PARSE(tk, res, parseToken(input));
 		if (isoneof(tk.type, TokenType::PlusPlus, TokenType::MinusMinus))
 		{
 			//把parent节点添加后缀操作
@@ -201,12 +208,12 @@ auto createFactorASTNode(std::string input) -> std::expected<std::tuple<std::sha
 
 		//解析下一个字符
 		std::string res1, res2;
-		tie(tk, res1) = parseToken(input);
+		TRY_PARSE(tk, res1, parseToken(input));
 		//如果是左小括号
 		if (tk.type == TokenType::Lp)
 		{
 			//解析下一个字符
-			tie(tk, res2) = parseToken(res1);
+			TRY_PARSE(tk, res2, parseToken(res1));
 			//不是右括号表示里面有函数输入参数
 			if (tk.type != TokenType::Rp)
 			{
@@ -219,7 +226,7 @@ auto createFactorASTNode(std::string input) -> std::expected<std::tuple<std::sha
 					TRY_PARSE(child, input, createExpressionASTNode(input));
 					parent->childs.push_back(child);
 					//解析逗号(如果不是逗号则循环中断)
-					tie(tk, input) = parseToken(input);
+					TRY_PARSE(tk, input, parseToken(input));
 				} while (tk.type == TokenType::Comma);
 
 				//如果不是小右括号则报错
@@ -259,7 +266,7 @@ auto createFactorASTNode(std::string input) -> std::expected<std::tuple<std::sha
 		}
 
 		//从input开始继续查询下一个符号(不接着上一个else是因为存在耦合体现不出优先级)
-		tie(tk, res1) = parseToken(input);
+		TRY_PARSE(tk, res1, parseToken(input));
 		//如果是++或--
 		if (isoneof(tk.type, TokenType::PlusPlus, TokenType::MinusMinus))
 		{
@@ -294,14 +301,14 @@ auto createTermASTNode(std::string input) -> std::expected<std::tuple<std::share
 	while (true)
 	{
 		//获取符号
-		auto[op, str] = parseToken(input);
+		TRY_PARSE_AUTO(op, str, parseToken(input));
 		//乘号、除号或者阶乘
 		if (isoneof(op.type, TokenType::Mul, TokenType::Div, TokenType::Pow, TokenType::Mod))
 		{
 			//把父节点搬移到子节点1的位置
 			child1 = parent;
 			//获取子节点2
-			TRY_PARSE(child2, input, createArithmeticASTNode(str));
+			TRY_PARSE(child2, input, createFactorASTNode(str));
 
 			//创建父节点
 			parent = std::make_shared<ASTNode>();
@@ -332,14 +339,14 @@ auto createArithmeticASTNode(std::string input) -> std::expected<std::tuple<std:
 	while (true)
 	{
 		//获取符号
-		auto[op, str] = parseToken(input);
+		TRY_PARSE_AUTO(op, str, parseToken(input));
 		//加号或者减号
 		if (isoneof(op.type, TokenType::Plus, TokenType::Minus))
 		{
 			//把父节点搬移到子节点1的位置
 			child1 = parent;
 			//获取子节点2
-			TRY_PARSE(child2, input, createFactorASTNode(str));
+			TRY_PARSE(child2, input, createTermASTNode(str));
 			//创建父节点
 			parent = std::make_shared<ASTNode>();
 			//设置父节点token
@@ -369,7 +376,7 @@ auto createRelationASTNode(std::string input) -> std::expected<std::tuple<std::s
 	while (true)
 	{
 		//获取符号
-		auto[op, str] = parseToken(input);
+		TRY_PARSE_AUTO(op, str, parseToken(input));
 		//加号或者减号
 		if (isoneof(op.type, TokenType::Less, TokenType::Great, TokenType::NotLess, TokenType::NotGreat, TokenType::Equal, TokenType::NotEqual))
 		{
@@ -406,7 +413,7 @@ auto createLogicASTNode(std::string input) -> std::expected<std::tuple<std::shar
 	while (true)
 	{
 		//获取符号
-		auto[op, str] = parseToken(input);
+		TRY_PARSE_AUTO(op, str, parseToken(input));
 		//加号或者减号
 		if (isoneof(op.type, TokenType::AndAnd, TokenType::OrOr))
 		{
@@ -502,7 +509,7 @@ auto createDefArrayASTNode(std::shared_ptr<ASTNode> node, std::string input) -> 
 			//添加到vector中
 			vnodes.push_back(child);
 			//读取一个token
-			std::tie(tk, input) = parseToken(input);
+			TRY_PARSE(tk, input, parseToken(input));
 		} while (tk.type == TokenType::Comma);
 
 		//如果停下来的时候不是右括号则报错
@@ -528,7 +535,7 @@ auto createExpressionASTNode(std::string input) -> std::expected<std::tuple<std:
 	//获得第一个token
 	Token tk;
 	std::string str;
-	std::tie(tk, str) = parseToken(input);
+	TRY_PARSE(tk, str, parseToken(input));
 
 	std::shared_ptr<ASTNode> parent;
 
@@ -626,7 +633,7 @@ auto createExpressionASTNode(std::string input) -> std::expected<std::tuple<std:
 	{
 		//则继续再读一个字符
 		Token tktemp;
-		std::tie(tktemp, str) = parseToken(str);
+		TRY_PARSE(tktemp, str, parseToken(str));
 		//如果是=、+=、-=、*=、/=
 		if (isoneof(tktemp.type, TokenType::Assign, TokenType::SelfPlus, TokenType::SelfMinus, TokenType::SelfMul, TokenType::SelfDiv))
 		{
@@ -657,7 +664,7 @@ auto createExpressionASTNode(std::string input) -> std::expected<std::tuple<std:
 		TRY_PARSE_AUTO(child, str, createDeRefASTNode(input));
 		//则继续再读一个字符
 		Token tktemp;
-		std::tie(tktemp, str) = parseToken(str);
+		TRY_PARSE(tktemp, str, parseToken(str));
 		//如果是=、+=、-=、*=、/=
 		if (isoneof(tktemp.type, TokenType::Assign, TokenType::SelfPlus, TokenType::SelfMinus, TokenType::SelfMul, TokenType::SelfDiv))
 		{
@@ -705,7 +712,7 @@ auto createBlockASTNode(std::string input) -> std::expected<std::tuple<std::shar
 		TRY_PARSE(child, input, createStatementASTNode(input));
 		parent->childs.push_back(child);
 		//再解析一个tk
-		std::tie(tk, str) = parseToken(input);
+		TRY_PARSE(tk, str, parseToken(input));
 		//不是Block、IF、While、For等特殊语句的情况下
 		if (isnoneof(child->tk.type, TokenType::Block, TokenType::If, TokenType::While, TokenType::Do, TokenType::For))
 		{
@@ -719,7 +726,7 @@ auto createBlockASTNode(std::string input) -> std::expected<std::tuple<std::shar
 			}
 		}
 		//再解析一个tk
-		std::tie(tk, str) = parseToken(input);
+		TRY_PARSE(tk, str, parseToken(input));
 	} while (tk.type != TokenType::RBrace);
 
 	//如果不是右大括号则报错
@@ -767,7 +774,7 @@ auto createIfASTNode(std::string input) -> std::expected<std::tuple<std::shared_
 
 	//读取下一个token
 	std::string str;
-	std::tie(tk, str) = parseToken(input);
+	TRY_PARSE(tk, str, parseToken(input));
 	//如果是else则继续添加else分支的结果
 	//如果是elseif则看作一个新的if递归即可
 	if (tk.type == TokenType::ElseIf)
@@ -822,7 +829,7 @@ auto createElseIfASTNode(std::string input) -> std::expected<std::tuple<std::sha
 
 	//读取下一个token
 	std::string str;
-	std::tie(tk, str) = parseToken(input);
+	TRY_PARSE(tk, str, parseToken(input));
 	//如果是else则继续添加else分支的结果
 	//如果是elseif则看作一个新的if递归即可
 	if (tk.type == TokenType::ElseIf)
@@ -1023,7 +1030,7 @@ auto createDefProcASTNode(std::string input) -> std::expected<std::tuple<std::sh
 
 	//读取函数输入形式参量
 	std::list<Token> paras;
-	auto[tk, res] = parseToken(input);
+	TRY_PARSE_AUTO(tk, res, parseToken(input));
 
 	//0输入参量
 	if (tk.type == TokenType::Rp)
@@ -1041,7 +1048,7 @@ auto createDefProcASTNode(std::string input) -> std::expected<std::tuple<std::sh
 			//注册信息
 			paras.push_back(tkarg);
 			//再读取一个token
-			std::tie(tk, input) = parseToken(input);
+			TRY_PARSE(tk, input, parseToken(input));
 		} while (tk.type == TokenType::Comma);
 
 		//判断停止while后的符号是不是右括号 如果不是则报错
@@ -1096,7 +1103,7 @@ auto createStatementASTNode(std::string input) -> std::expected<std::tuple<std::
 	std::shared_ptr<ASTNode> parent;
 
 	//解析第一个tk
-	auto[tk, res] = parseToken(input);
+	TRY_PARSE_AUTO(tk, res, parseToken(input));
 
 	//如果在映射表中
 	if (ASTNodeMap.find(tk.type) != ASTNodeMap.end())
