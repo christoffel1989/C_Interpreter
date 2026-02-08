@@ -92,28 +92,6 @@ using State = std::variant<ContinueState, BreakState, ReturnState, ErrorState>;
 //单子
 using ASTResult = std::expected<double, State>;
 
-//单子解析宏
-#define TRY_(expr) \
-    if (!(expr)) [[unlikely]] { \
-        return expr; \
-    }
-
-#define TRY(var, expr) \
-    auto&& var##_result = (expr); \
-    if (!var##_result) [[unlikely]] { \
-        if (std::holds_alternative<ReturnState>(var##_result.error())) { return std::get<ReturnState>(var##_result.error()).value; } \
-        return std::unexpected{var##_result.error()}; \
-    } \
-    var = std::move(var##_result).value();
-
-#define TRY_AUTO(var, expr) \
-    auto&& var##_result = (expr); \
-    if (!var##_result) [[unlikely]] { \
-        if (std::holds_alternative<ReturnState>(var##_result.error())) { return std::get<ReturnState>(var##_result.error()).value; } \
-        return std::unexpected{var##_result.error()}; \
-    } \
-    auto var = std::move(var##_result).value();
-
 //单子包装器
 template<typename F>
 concept UnaryBoolFunction = std::regular_invocable<F, double>&& std::same_as<std::invoke_result_t<F, bool>, bool>;
@@ -131,3 +109,23 @@ template<BinaryBoolFunction BinaryOp>
 auto ast_wrap(BinaryOp op) { return [op](double a, double b) -> ASTResult { return ASTResult(op(a, b)); }; }
 template<BinaryDoubleFunction BinaryOp>
 auto ast_wrap(BinaryOp op) { return [op](double a, double b) -> ASTResult { return ASTResult(op(a, b)); }; }
+
+//单子解析宏
+#define TRY_PARSE(para1, para2, expr) if (auto result = expr) std::tie(para1, para2) = result.value(); else return std::unexpected(result.error());
+#define TRY_PARSE_AUTO(para1, para2, expr) auto _______result = expr; if (!_______result.has_value()) return std::unexpected(_______result.error()); auto[para1, para2] = _______result.value();
+#define TRY_PARSE_IGNORE(para, expr) if (auto result = expr) std::tie(std::ignore, para) = result.value(); else return std::unexpected(result.error());
+#define TRY_IGNORE(expr) if (auto result = expr; !result.has_value()) return std::unexpected(result.error());
+#define TRY(var, expr) \
+    auto&& var##_result = (expr); \
+    if (!var##_result) [[unlikely]] { \
+        if (std::holds_alternative<ReturnState>(var##_result.error())) { return std::get<ReturnState>(var##_result.error()).value; } \
+        return std::unexpected{var##_result.error()}; \
+    } \
+    var = std::move(var##_result).value();
+#define TRY_AUTO(var, expr) \
+    auto&& var##_result = (expr); \
+    if (!var##_result) [[unlikely]] { \
+        if (std::holds_alternative<ReturnState>(var##_result.error())) { return std::get<ReturnState>(var##_result.error()).value; } \
+        return std::unexpected{var##_result.error()}; \
+    } \
+    auto var = std::move(var##_result).value();

@@ -388,7 +388,7 @@ auto interpreteForAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResu
 	auto body = *(++iter);
 
 	double result = 0;
-	TRY_(interpreteAST(start, &subenv));
+	TRY_IGNORE(interpreteAST(start, &subenv));
 	while (true)
 	{
 		TRY_AUTO(condition_result, interpreteAST(end, &subenv));
@@ -420,7 +420,7 @@ auto interpreteForAST(std::shared_ptr<ASTNode> ast, Environment* env) -> ASTResu
 				return std::unexpected(e);
 			}
 		}
-		TRY_(interpreteAST(increment, &subenv));
+		TRY_IGNORE(interpreteAST(increment, &subenv));
 	}
 
 	return result;
